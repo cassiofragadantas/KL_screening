@@ -85,17 +85,17 @@ if ~isfield(param, 'save_all'); param.save_all = false; end
 if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'stop_crit'); param.stop_crit = 'difference'; end
 if ~isfield(param, 'epsilon'); param.epsilon = 0; end
+if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 % nb_portions = 10;
 % idx_portions = round(linspace(0,m,nb_portions+1));
 
 % objective function
 %f.eval = @(a,b) sum(a.*log(a./b) - a + b); % KL distance
-if param.epsilon == 0
-    f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./a(y~=0))) + sum(- y + a); % force 0*log(0) = 0 (instead of NaN) 
+if param.epsilon_y == 0
+    f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./(a(y~=0)+ param.epsilon))) + sum(- y + a + param.epsilon - param.epsilon_y); % force 0*log(0) = 0 (instead of NaN) 
 else
-    f.eval = @(a) sum((y+param.epsilon).*log((y+param.epsilon)./(a+param.epsilon)) - y + a); % KL distance (fixing first variable as y) with optional epsilon regularizer
+    f.eval = @(a) sum((y+param.epsilon_y).*log((y+param.epsilon_y)./(a+param.epsilon)) - y + a + param.epsilon - param.epsilon_y); % KL distance (fixing first variable as y) with optional epsilon regularizer
 end
-% f.eval = sum((y(y~=0)+param.epsilon).*log((y(y~=0)+param.epsilon)./(Ax(y~=0)+param.epsilon))) - sum(y) + sum(Ax); %NOT THE SAME AS ABOVE!
 g.eval = @(a) lambda*norm(a, 1); % regularization
 
 tStart = tic;
@@ -106,7 +106,7 @@ stop_crit = Inf; % Difference between solutions in successive iterations
 % screen_vec = false(size(x));
 
 Ax = A*x; % For first iteration
-if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon); end % Initialize screening rule, if not given as an input
+if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
 % A2 = A.^2; %used for greedy version of CoD. Uncomment this and l.151-160
 
 if param.save_all
@@ -143,15 +143,15 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
     % Update x and Ax(from Hsieh-Dhillon2011 Coord Descent)
     %C implementation. (attention! the value of x is changed inside the MEX function)
-%     x = CoD_KL_l1_update_slow(y+param.epsilon, A.', x, Ax+param.epsilon, lambda); Ax = A*x;
-%     [x, Ax] = CoD_KL_l1_update_noeps(y+param.epsilon, A, x, Ax+param.epsilon, lambda); Ax = Ax - param.epsilon; %the Ax 
-    CoD_KL_l1_update(y, A, x, Ax, lambda, param.epsilon); %implemented in C   
+%     x = CoD_KL_l1_update_slow(y+param.epsilon_y, A.', x, Ax+param.epsilon, lambda); Ax = A*x;
+%     [x, Ax] = CoD_KL_l1_update_noeps(y+param.epsilon_y, A, x, Ax+param.epsilon, lambda); Ax = Ax - param.epsilon; %the Ax 
+    CoD_KL_l1_update(y, A, x, Ax, lambda, param.epsilon, param.epsilon_y); %implemented in C   
     %Update coordinates by batches (portions)
 %     portion = mod(k-2,nb_portions)+1;
 %     CoD_KL_l1_update_portion(y, A, x, Ax, lambda, param.epsilon,idx_portions(portion),idx_portions(portion+1)); %implemented in C    
     %Matlab implementation (for loop)
 %     for k_coord = 1:m
-%         tmp = (y+param.epsilon)./(Ax+param.epsilon);
+%         tmp = (y+param.epsilon_y)./(Ax+param.epsilon);
 %         tmp2 = tmp./(Ax+param.epsilon);
 %         g1 = A(:,k_coord).'*(1-tmp);
 %         g2 = (A(:,k_coord).^2).'*(tmp2);
@@ -161,7 +161,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     %Updating all coordinates simultaneously would require the inverse Hessian
     % CoD with "best-improvement" coordinate choice (naive implementation)
 %     for count = 1:round(sqrt(m)) %1:m
-%         tmp = (y+param.epsilon)./(Ax+param.epsilon);
+%         tmp = (y+param.epsilon_y)./(Ax+param.epsilon);
 %         tmp2 = tmp./(Ax+param.epsilon);
 %         g1_all = A.'*(1-tmp);
 %         g2_all = (A2).'*(tmp2);
@@ -172,19 +172,19 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 %     end
 
     % Update dual point
-    theta = (y - Ax)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
+    theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
     ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
     theta = theta/max(1,max(ATtheta)); %dual scaling (or: max(ATtheta))
 %     ATtheta = ATtheta/max(ATtheta);
-    if any(theta<-1/lambda), warning('some theta_i < -1/lambda'); end
+    if any(theta<-1/lambda-eps), warning('some theta_i < -1/lambda'); end
     
     % Stopping criterion
     primal = f.eval(Ax) + g.eval(x) ;
-    if param.epsilon == 0
-        dual = (y(y~=0) + param.epsilon).'*log(1+lambda*theta(y~=0)); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
+    if param.epsilon_y == 0
+        dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
     else
-        dual = (y + param.epsilon).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-    end    
+        dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
+    end
     
     gap = primal - dual; % gap has to be calculated anyway for GAP_Safe
     
@@ -196,7 +196,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     % Screening
-    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, param.epsilon, theta, y);
+    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
     
     %Test! coordinate-wise limit for dual function 
 %     theta_max = max(precalc.A_1/lambda,1)*pinvAi_1.';

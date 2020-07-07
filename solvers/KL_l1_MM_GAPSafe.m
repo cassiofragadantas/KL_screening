@@ -84,15 +84,15 @@ if ~isfield(param, 'save_all'); param.save_all = false; end
 if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'stop_crit'); param.stop_crit = 'difference'; end
 if ~isfield(param, 'epsilon'); param.epsilon = 0; end
+if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 
 % objective function
 %f.eval = @(a,b) sum(a.*log(a./b) - a + b); % KL distance
-if param.epsilon == 0
-    f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./a(y~=0))) + sum(- y + a); % force 0*log(0) = 0 (instead of NaN) 
+if param.epsilon_y == 0
+    f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./(a(y~=0)+ param.epsilon))) + sum(- y + a + param.epsilon - param.epsilon_y); % force 0*log(0) = 0 (instead of NaN) 
 else
-    f.eval = @(a) sum((y+param.epsilon).*log((y+param.epsilon)./(a+param.epsilon)) - y + a); % KL distance (fixing first variable as y) with optional epsilon regularizer
+    f.eval = @(a) sum((y+param.epsilon_y).*log((y+param.epsilon_y)./(a+param.epsilon)) - y + a + param.epsilon - param.epsilon_y); % KL distance (fixing first variable as y) with optional epsilon regularizer
 end
-% f.eval = sum((y(y~=0)+param.epsilon).*log((y(y~=0)+param.epsilon)./(Ax(y~=0)+param.epsilon))) - sum(y) + sum(Ax); %NOT THE SAME AS ABOVE!
 g.eval = @(a) lambda*norm(a, 1); % regularization
 
 tStart = tic;
@@ -104,7 +104,7 @@ stop_crit = Inf; % Difference between solutions in successive iterations
 
 Ax = A*x; % For first iteration
 sumA = A.'*ones(n,1);
-if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon); end % Initialize screening rule, if not given as an input
+if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
 
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
@@ -139,8 +139,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     x_old = x;
     
     % Update x
-%     x = x.*(A.'*((y+param.epsilon)./(Ax+param.epsilon))) ./ (sumA + lambda);
-    yAx = (y+param.epsilon)./(Ax+param.epsilon);
+%     x = x.*(A.'*((y+param.epsilon_y)./(Ax+param.epsilon))) ./ (sumA + lambda);
+    yAx = (y+param.epsilon_y)./(Ax+param.epsilon);
     ATyAx = A.'*yAx;
     x = x.*ATyAx./(sumA + lambda);
 
@@ -151,17 +151,17 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     % Update dual point
     ATtheta = (1/lambda)*(ATyAx - sumA);
     theta = (yAx - ones(n,1))/(max(1,max(ATtheta))*lambda); %dual scaling (or: max(ATtheta))
-%     theta = (y - Ax)./(lambda*(Ax+param.epsilon)*max(1,max(ATtheta)));
+%     theta = (y + param.epsilon_y - Ax - param.epsilon)./(lambda*(Ax+param.epsilon)*max(1,max(ATtheta)));
     ATtheta = ATtheta/max(ATtheta);
     if any(theta<-1/lambda), warning('some theta_i < -1/lambda'); end
     
     % Stopping criterion
     primal = f.eval(Ax) + g.eval(x) ;
-    if param.epsilon == 0
-        dual = (y(y~=0) + param.epsilon).'*log(1+lambda*theta(y~=0)); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
+    if param.epsilon_y == 0
+        dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
     else
-        dual = (y + param.epsilon).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-    end    
+        dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
+    end
     
     gap = primal - dual; % gap has to be calculated anyway for GAP_Safe
     
@@ -173,7 +173,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     % Screening
-    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, param.epsilon, theta, y);
+    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, param.epsilon_y);
 
     % Remove screened coordinates (and corresponding atoms)
 %     A = A(:,~screen_vec);

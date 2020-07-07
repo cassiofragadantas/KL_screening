@@ -35,7 +35,7 @@ double obj(int n, int m, double *V, double *WH)
 	return (total);
 }
 
-void update(int m, int k, double *Wt, double *WHt, double *Vt, double *H, double l1reg, double eps)
+void update(int m, int k, double *Wt, double *WHt, double *Vt, double *H, double l1reg, double eps, double eps_y)
 {
 	int maxinner = 1;
     mwSignedIndex one = 1;
@@ -50,7 +50,7 @@ void update(int m, int k, double *Wt, double *WHt, double *Vt, double *H, double
             // Calculate first and second derivatives for Newton's update
             for (int j=0; j<m ; j++ )
 			{	
-				tmp = (Vt[j]+eps)/(WHt[j]+eps);
+				tmp = (Vt[j]+eps_y)/(WHt[j]+eps);
 				g = g + H[q*m + j]*(1-tmp); // 1-V/WH
 				h = h + H[q*m + j]*H[q*m + j]*tmp/(WHt[j]+eps);    //V/WH^2
 			}
@@ -96,7 +96,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
 	int i;
 	double *V, *W, *H, *WH;
-    double l1reg = 0, eps = 1e-15;
+    double l1reg = 0, eps = 1e-15, eps_y = 1e-15;
 
 	int n,m, k;
 	double *outH, *outWH;
@@ -142,10 +142,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     if ( nrhs>5 )
         eps =  mxGetScalar(prhs[5]);
+    
+    if ( nrhs>6 )
+        eps_y =  mxGetScalar(prhs[6]);
    
     // Update H
     if (m == 1){
-        update(n,k,H,WH,V,W,l1reg,eps);
+        update(n,k,H,WH,V,W,l1reg,eps,eps_y);
     }else{ //case m>1
         for ( int i=0 ; i<m ; i++ )
         {
@@ -153,7 +156,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             double *wht = &(WH[i*n]);
             double *vt = &(V[i*n]);
 
-            update(n,k,Ht,wht,vt,W,l1reg,eps);
+            update(n,k,Ht,wht,vt,W,l1reg,eps,eps_y);
 
         }
     }

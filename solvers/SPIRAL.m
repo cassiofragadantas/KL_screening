@@ -76,6 +76,7 @@ if ~isfield(param, 'stop_crit'); param.stop_crit = 'difference'; end
 if ~isfield(param, 'save_all'); param.save_all = false; end
 if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'epsilon'); param.epsilon = 1e-10; end %
+if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 if ~isfield(param, 'euc_dist'); param.euc_dist = false; end
 
 if (param.epsilon==0) && any(y==0)
@@ -88,7 +89,11 @@ if param.euc_dist % gaussian (Euclidean data fidelity)
     f.eval = @(a) 0.5*norm(y - a,2)^2; % Euclidean distance
 else % default is poisson (KL data fidelity)
     poisson_noise = true;
-    f.eval = @(a) sum((y+param.epsilon).*log((y+param.epsilon)./(a+param.epsilon)) - y + a); % KL distance (fixing first variable as y) with optional epsilon regularizer
+    if param.epsilon_y == 0
+        f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./(a(y~=0)+ param.epsilon))) + sum(- y + a + param.epsilon - param.epsilon_y); % force 0*log(0) = 0 (instead of NaN) 
+    else
+        f.eval = @(a) sum((y+param.epsilon_y).*log((y+param.epsilon_y)./(a+param.epsilon)) - y + a + param.epsilon - param.epsilon_y); % KL distance (fixing first variable as y) with optional epsilon regularizer
+    end
 end
 % Regularization (g)
 g.eval = @(a) lambda*norm(a, 1); % regularization
@@ -99,10 +104,10 @@ tStart = tic;
 %% Initialization
 x = x0; % Signal to find
 n = 1; % Iteration number
-sqrty = sqrt(y + param.epsilon);
+sqrty = sqrt(y + param.epsilon_y);
 
 Ax = A*x; % For first iteration
-rho = y - Ax;
+rho = y - Ax + param.epsilon_y - param.epsilon;
 if poisson_noise, rho = rho./(Ax+param.epsilon); end
 grad = -A.'*rho;        
 
@@ -164,7 +169,7 @@ while (stop_crit > param.TOL) && (n < param.MAX_ITER)
 %         Adx = Ax - Ax_old;
         normsqdx = sum( dx(:).^2 );
         
-%         rho = y - Ax;
+%         rho = y - Ax + param.epsilon_y - param.epsilon;
 %         if poisson_noise, rho = rho./(Ax+param.epsilon); end
 %         grad = -A.'*rho; % heavy    
 
@@ -183,7 +188,7 @@ while (stop_crit > param.TOL) && (n < param.MAX_ITER)
     % Other updates (using new x iterate)
     Adx = Ax - Ax_old;
 
-    rho = y - Ax;
+    rho = y - Ax + param.epsilon_y - param.epsilon;
     if poisson_noise, rho = rho./(Ax+param.epsilon); end
     grad = -A.'*rho; % heavy    
     
@@ -193,12 +198,12 @@ while (stop_crit > param.TOL) && (n < param.MAX_ITER)
         ATtheta = -grad./lambda;
         theta = rho/(lambda*max(1,max(ATtheta))); %dual scaling (or: max(ATtheta)))
         if any(theta<-1/lambda), warning('some theta_i < -1/lambda'); end
-
-        if param.epsilon == 0
-            dual = (y(y~=0) + param.epsilon).'*log(1+lambda*theta(y~=0)); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
+   
+        if param.epsilon_y == 0
+            dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
         else
-            dual = (y + param.epsilon).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-        end        
+            dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
+        end
     	primal = obj(n);
         
     	gap = primal - dual; % gap has to be calculated anyway for GAP_Safe

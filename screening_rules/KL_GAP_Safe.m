@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, epsilon, theta, y)
+function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
 % KL_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % problem that uses Kullback-Leibler divergence as the data-fidelity term :
 % 
@@ -46,6 +46,8 @@ function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, g
 % Author: Cassio F. Dantas
 % Date: 30 Mar 2020
 
+if (nargin < 7), epsilon_y = 0; end
+
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
 
@@ -70,7 +72,7 @@ improving = true; k=0;
 while improving
     denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
 %     denominator_r = min( denominator_r , precalc.denominator );
-    alpha_r = lambda^2 * min( (y(y~=0)+epsilon)./(denominator_r) );
+    alpha_r = lambda^2 * min( (y(y~=0)+epsilon_y)./(denominator_r) );
     radius_new = sqrt(2*gap/alpha_r);
     improvement = (radius - radius_new);
     if improvement/radius > 1e-1

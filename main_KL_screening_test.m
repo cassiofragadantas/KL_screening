@@ -4,15 +4,16 @@ addpath('./datasets/')
 rng(10), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n');
 
 %==== User parameters ====
-mc_it = 10; %100 % Number of noise realizations
+mc_it = 2; %100 % Number of noise realizations
 plots = false;
 param.save_all = true;
 param.verbose = false;
 param.stop_crit = 'gap'; 
 param.TOL = 1e-9; %-1 to run until max iteration
-param.MAX_ITER = 1e4; %1e6
+param.MAX_ITER = 1e6;
 epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
+param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
 lambdas_rel = 1E-6; %logspace(-6,-10,9); %logspace(-1,-12,100); %logspace(-8,-12,100); %logspace(-2,0,100); % regularization (relative to lambda_max) %(0.01:0.01:1.1)
 
@@ -21,8 +22,8 @@ warm_start = false;
 param.euc_dist = false; %If true, runs SPIRAL and FISTA in standard lasso problem (w/ Euclidean distance)
 
 %==== Problem parameters ====
-noise_type = 'none'; % Options: 'poisson', 'gaussian_std', 'gaussian_snr', otherwise: no noise.
-exp_type = 'MNIST'; % Options: 'synthetic', or some real dataset 
+noise_type = 'poisson'; % Options: 'poisson', 'gaussian_std', 'gaussian_snr', otherwise: no noise.
+exp_type = 'synthetic'; % Options: 'synthetic', or some real dataset 
             % (e.g. 'TasteProfile', '20newsgroups', 'NIPSpapers', 'Encyclopedia', 'MNIST')
 param.normalizeA = true;
 param.ymult = 5; %~5: for y with lots of zero entries. Synthetic experiment only.
@@ -139,10 +140,11 @@ for k_lambda = 1:length(lambdas)
 
     %Precalculations for Screening tests
     tPrecalc = tic;
-    precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon, precalc);
+    precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y, precalc);
     time_precalc(k_lambda) = time_precalc(k_lambda) + toc(tPrecalc)/mc_it;
 
     %Coordinate Descent - Hsieh2011
+    fprintf('CoD solver...\n')
 %     profile on    
     [x_CoD, obj_CoD, x_it_CoD, stop_crit_it_CoD, time_it_CoD] ...
         = CoD_KL_l1(A,y,lambda,x0_CoD,param);
@@ -150,67 +152,32 @@ for k_lambda = 1:length(lambdas)
 %     profsave(profile('info'),'./Results/new_Profile_CoD')
     
     %CoD + Screening
+    fprintf('CoD solver + Screening...\n')
     [x_CoDscr, obj_CoDscr, x_it_CoDscr, R_it_CoDscr, screen_it_CoDscr, stop_crit_it_CoDscr, time_it_CoDscr] ...
         = CoD_KL_l1_GAPSafe(A,y,lambda,x0_CoDscr,param,precalc);
     
     %MM
+    fprintf('MM solver...\n')
     [x_MM, obj_MM, x_it_MM, stop_crit_it_MM, time_it_MM] ...
         = KL_l1_MM(A,y,lambda,x0_MM,param);
     
     %MM + Screening
+    fprintf('MM solver + Screening...\n')
     [x_MMscr, obj_MMscr, x_it_MMscr, R_it_MMscr, screen_it_MMscr, stop_crit_it_MMscr, time_it_MMscr] ...
         = KL_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
 
     %SPIRAL
+    fprintf('SPIRAL solver...\n')
     [x_SPIRAL, obj_SPIRAL, x_it_SPIRAL, stop_crit_it_SPIRAL, time_it_SPIRAL, step_it_SPIRAL] ...
         = SPIRAL(A, y, lambda, x0_SPIRAL, param);
 
     %SPIRAL + Screening
+    fprintf('SPIRAL solver + Screening...\n')
     [x_SPIRALscr, obj_SPIRALscr, x_it_SPIRALscr, R_it_SPIRALscr, screen_it_SPIRALscr, stop_crit_it_SPIRALscr, time_it_SPIRALscr] ...
         = SPIRAL_GAPSafe(A,y,lambda,x0_SPIRALscr,param,precalc);
-
-    %ORIGINAL SPIRAL IMPLEMENTATION
-    addpath solvers/others/SPIRALTAP/
-    % Setup function handles for computing A and A^T:
-    AT_func  = @(x) full(A'*x);
-    A_func   = @(x) full(A*x);
-    % Set regularization parameters and iteration limit:
-    tau   = full(lambda); % 1e-6;
-    maxiter = param.MAX_ITER; %100;
-    tolerance = 1e-8;
-    verbose = 1; %10
-
-    % Simple initialization:  
-    % AT(y) rescaled to a least-squares fit to the mean intensity
-%     finit = (sum(sum(y)).*numel(AT(y)))...
-%                 ./(sum(sum(AT(y))) .*sum(sum((AT(ones(size(y)))))))...
-%                 .*AT(y);
-    finit = x0_SPIRAL;
-
-    % Run the algorithm:
-    % Demonstrating all the options for our algorithm:
-    %removed output reconerrorSPIRAL
-    [fhatSPIRAL, iterationsSPIRAL, objectiveSPIRAL,...
-        cputimeSPIRAL] ...
-        = SPIRALTAP(full(y),A_func,tau,...
-        'maxiter',maxiter,...
-        'Initialization',finit,...
-        'AT',AT_func,...
-        'miniter',5,...
-        'stopcriterion',1,...
-        'tolerance',tolerance,...
-        'alphainit',1,...
-        'alphamin', 1e-30,...
-        'alphamax', 1e30,...
-        'alphaaccept',1e30,...
-        'logepsilon',param.epsilon,...
-        'saveobjective',1,...
-        'savereconerror',0,...
-        'savecputime',1,...
-        'savesolutionpath',0,...
-        'verbose',verbose);    %        'truth',f,...
     
     %FISTA
+%     fprintf('FISTA solver...\n')
 %     g.eval = @(x) lambda*norm(x, 1);
 %     g.prox = @(x, tau) nnSoftThresholding(x, lambda*tau);
 %     f.eval = @(x) sum((y+epsilon).*log((y+epsilon)./(A*x+epsilon)) - y + A*x);
@@ -289,12 +256,12 @@ for k_lambda = 1:length(lambdas)
     
     % Time for various convergence thresholds
     for kk = 1:5
-        time_CoD_various(kk,k_lambda) = time_CoD_various(kk,k_lambda) + time_it_CoD(find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1))/mc_it;
-        time_CoDscr_various(kk,k_lambda) = time_CoDscr_various(kk,k_lambda) + time_it_CoDscr(find(stop_crit_it_CoDscr<10^(5-kk)*param.TOL,1))/mc_it;
-        time_MM_various(kk,k_lambda) = time_MM_various(kk,k_lambda) + time_it_MM(find(stop_crit_it_MM<10^(5-kk)*param.TOL,1))/mc_it;
-        time_MMscr_various(kk,k_lambda) = time_MMscr_various(kk,k_lambda) + time_it_MMscr(find(stop_crit_it_MMscr<10^(5-kk)*param.TOL,1))/mc_it;
-        time_SPIRAL_various(kk,k_lambda) = time_SPIRAL_various(kk,k_lambda) + time_it_SPIRAL(find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1))/mc_it;
-        time_SPIRALscr_various(kk,k_lambda) = time_SPIRALscr_various(kk,k_lambda) + time_it_SPIRALscr(find(stop_crit_it_SPIRALscr<10^(5-kk)*param.TOL,1))/mc_it;
+        time_CoD_various(kk,k_lambda) = time_CoD_various(kk,k_lambda) + min([inf time_it_CoD(find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_CoDscr_various(kk,k_lambda) = time_CoDscr_various(kk,k_lambda) + min([inf time_it_CoDscr(find(stop_crit_it_CoDscr<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_MM_various(kk,k_lambda) = time_MM_various(kk,k_lambda) + min([inf time_it_MM(find(stop_crit_it_MM<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_MMscr_various(kk,k_lambda) = time_MMscr_various(kk,k_lambda) + min([inf time_it_MMscr(find(stop_crit_it_MMscr<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_SPIRAL_various(kk,k_lambda) = time_SPIRAL_various(kk,k_lambda) + min([inf time_it_SPIRAL(find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_SPIRALscr_various(kk,k_lambda) = time_SPIRALscr_various(kk,k_lambda) + min([inf time_it_SPIRALscr(find(stop_crit_it_SPIRALscr<10^(5-kk)*param.TOL,1))/mc_it]);
     end
     
     % Reconstruction error

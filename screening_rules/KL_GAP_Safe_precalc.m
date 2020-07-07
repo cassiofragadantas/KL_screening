@@ -1,4 +1,4 @@
-function precalc = KL_GAP_Safe_precalc(A, y, lambda, epsilon, precalc)
+function precalc = KL_GAP_Safe_precalc(A, y, lambda, epsilon_y, precalc)
 % This function performs some precalculation required as input in function 
 % KL_GAP_Safe
 %
@@ -40,34 +40,34 @@ if (nargin < 5) || isempty(precalc) % recompute everything
     % Norm of the columns of A
     precalc.normA = sqrt(sum(A.^2)).';
 
-    % if epsilon == 0, y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); end %neglecting zero entries in y
-    y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); disp('GAP Safe Radius: neglecting zero entries in y (even for epsilon != 0)');
+    % if epsilon_y == 0, y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); end %neglecting zero entries in y
+    y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); disp('GAP Safe Radius: neglecting zero entries in y (even for epsilon_y != 0)');
 
     % Sum of yi
-    %precalc.sumy = sum(y+epsilon); %or abs(y+epsilon) just for precaution
+    %precalc.sumy = sum(y+epsilon_y); %or abs(y+epsilon_y) just for precaution
 
     % Max of yi
-    %precalc.maxy = max(y+epsilon);
+    %precalc.maxy = max(y+epsilon_y);
 
     % Min of yi
-    precalc.miny = min(y+epsilon);
+    precalc.miny = min(y+epsilon_y);
 end
 
-% if epsilon == 0, y=y(y~=0); end %neglecting zero entries in y
+% if epsilon_y == 0, y=y(y~=0); end %neglecting zero entries in y
 y=y(y~=0);
 
 % alpha (strong concavity constant)
-% precalc.alpha_all = lambda^2 * min(y+epsilon)/(1 + max(precalc.A_1,lambda)*precalc.pinvA_1).^2;  %separated min (less performant)
+% precalc.alpha_all = lambda^2 * min(y+epsilon_y)/(1 + max(precalc.A_1,lambda)*precalc.pinvA_1).^2;  %separated min (less performant)
 precalc.denominator = (1 + max(precalc.A_1,lambda)*precalc.pinvAi_1.').^2;
-precalc.alpha_coord = lambda^2 * min( (y+epsilon)./precalc.denominator ); %coordinate-wise min
+precalc.alpha_coord = lambda^2 * min( (y+epsilon_y)./precalc.denominator ); %coordinate-wise min
 precalc.alpha = precalc.alpha_coord; %This one will be updated over the iterations
 
 %WRONG: without the max - old radius (but does not consider theta negative entries)
-% precalc.alpha_all_old = lambda^2 * min(y+epsilon)/(1 + lambda*precalc.pinvA_1).^2;  %separated min (less performant)
-% precalc.alpha_coord_old = lambda^2 * min( (y+epsilon)./(1 + lambda*precalc.pinvAi_1.').^2 ); %coordinate-wise min
+% precalc.alpha_all_old = lambda^2 * min(y+epsilon_y)/(1 + lambda*precalc.pinvA_1).^2;  %separated min (less performant)
+% precalc.alpha_coord_old = lambda^2 * min( (y+epsilon_y)./(1 + lambda*precalc.pinvAi_1.').^2 ); %coordinate-wise min
 
 % Primal and Dual objective functions handle
 % Used only if not already calculated by Gap stopping criterion
-precalc.primal = @(Ax,x) sum((y+epsilon).*log((y+epsilon)./(Ax+epsilon)) - y + Ax) + lambda*norm(x,1);
-precalc.dual = @(theta) (y+epsilon).'*log(1+lambda*theta) - sum(lambda*epsilon*theta);
+% precalc.primal = @(Ax,x) sum((y+epsilon_y).*log((y+epsilon_y)./(Ax+epsilon)) - y + Ax) + lambda*norm(x,1);
+% precalc.dual = @(theta) (y+epsilon_y).'*log(1+lambda*theta) - sum(lambda*epsilon*theta);
 end
