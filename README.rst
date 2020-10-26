@@ -15,7 +15,7 @@ This is a **Matlab** code corresponds to the following paper:
 Disclaimers
 -----------
 
-- CoD_KL_l1_update.cpp needs to be compiled (>>cd solvers/, mex CoD_KL_l1_update.cpp)
+- CoD_KL_l1_update.cpp needs to be compiled (run 'mex CoD_KL_l1_update.cpp -lmwblas' from inside the solvers folder).
 - Datasets are not provided and need to be downloaded by the user and placed in a subfolder ./datasets (20 News Groups, NIPS papers, Taste Profile and Encyclopedia). See file load_dataset.m for further instructions.
 - Synthetic experiments can be performed directly.
 
