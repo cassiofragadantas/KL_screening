@@ -89,8 +89,6 @@ if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 % nb_portions = 10;
 % idx_portions = round(linspace(0,m,nb_portions+1));
 
-% idx_y0 = (y==0);
-
 % objective function
 %f.eval = @(a,b) sum(a.*log(a./b) - a + b); % KL distance
 if param.epsilon_y == 0
@@ -106,7 +104,9 @@ x = x0 + 0; % Signal to find (+0 avoid x to be just a pointer to x0)
 k = 1;  % Iteration number
 stop_crit = Inf; % Difference between solutions in successive iterations
 % screen_vec = false(size(x));
-rejected_coords = false(m,1); %Not done in other solver yet! Bug correction, so that solver works when param.save_all = false.
+rejected_coords = false(m,1);
+
+idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
 if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
@@ -177,9 +177,12 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     % Update dual point
     theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
     ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
-    theta = theta/max(1,max(ATtheta)); %dual scaling (or: max(ATtheta))
-%     ATtheta = ATtheta/max(ATtheta);
-%     theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
+    scaling = max(1,max(ATtheta));
+    theta = theta/scaling; %dual scaling (or: max(ATtheta))
+    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
+        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
+        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
+    end
     if any(theta<-1/lambda-eps), warning('some theta_i < -1/lambda'); end
     
     % Stopping criterion
@@ -214,6 +217,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     A(:,screen_vec) = []; 
     x(screen_vec) = []; 
     precalc.normA(screen_vec) = [];
+    precalc.sumA_zero(screen_vec) = [];
 %     A2(:,screen_vec) = []; %uncomment this for greedy variant of CoD
 
     rejected_coords(~rejected_coords) = screen_vec;

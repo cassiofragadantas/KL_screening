@@ -101,6 +101,9 @@ x = x0; % Signal to find
 k = 1;  % Iteration number
 stop_crit = Inf; % Difference between solutions in successive iterations
 % screen_vec = false(size(x));
+rejected_coords = false(m,1);
+
+idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
 sumA = A.'*ones(n,1);
@@ -150,9 +153,13 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 
     % Update dual point
     ATtheta = (1/lambda)*(ATyAx - sumA);
-    theta = (yAx - ones(n,1))/(max(1,max(ATtheta))*lambda); %dual scaling (or: max(ATtheta))
+    scaling =  max(1,max(ATtheta));
+    theta = (yAx - ones(n,1))/(scaling*lambda); %dual scaling (or: max(ATtheta))
 %     theta = (y + param.epsilon_y - Ax - param.epsilon)./(lambda*(Ax+param.epsilon)*max(1,max(ATtheta)));
-    ATtheta = ATtheta/max(ATtheta);
+    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
+        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
+        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
+    end
     if any(theta<-1/lambda), warning('some theta_i < -1/lambda'); end
     
     % Stopping criterion
@@ -182,7 +189,10 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     A(:,screen_vec) = []; 
     x(screen_vec) = []; 
     precalc.normA(screen_vec) = [];
+    precalc.sumA_zero(screen_vec) = [];
     sumA(screen_vec) = [];
+    
+    rejected_coords(~rejected_coords) = screen_vec;
     
     % Save intermediate results
     if param.save_all
@@ -193,8 +203,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         R_it(:,k) = radius;
         % Store screening vector per iteration
 %         screen_it(:,k) = screen_vec;
-        screen_it(:,k) = screen_it(:,k-1);
-        screen_it(~screen_it(:,k-1),k) = screen_vec;
+        screen_it(:,k) = rejected_coords;
         % Store iteration values
 %         x_it(:, k) = x;
         if save_x_it, x_it(~screen_it(:,k), k) = x; end
@@ -211,7 +220,7 @@ end
 % zero-padding solution
 x_old = x;
 x = zeros(m,1);
-x(~screen_it(:,k)) = x_old;
+x(~rejected_coords) = x_old;
 
 %reseting alpha
 precalc.alpha = precalc.alpha_coord;

@@ -108,6 +108,9 @@ tStart = tic;
 x = x0; % Signal to find
 k = 1; % Iteration number
 sqrty = sqrt(y + param.epsilon_y);
+rejected_coords = false(m,1);
+
+idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
 rho = y - Ax + param.epsilon_y - param.epsilon;
@@ -201,7 +204,12 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 
     %Dual point
     ATtheta = -grad./lambda;
-    theta = rho/(lambda*max(1,max(ATtheta))); %dual scaling (or: max(ATtheta)))
+    scaling = max(1,max(ATtheta));
+    theta = rho/(lambda*scaling); %dual scaling (or: max(ATtheta)))
+    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
+        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
+        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
+    end
     if any(theta<-1/lambda), warning('some theta_i < -1/lambda'); end
     
     % Stopping criterion
@@ -231,7 +239,10 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     A(:,screen_vec) = []; 
     x(screen_vec) = []; 
     precalc.normA(screen_vec) = [];
+    precalc.sumA_zero(screen_vec) = [];    
     grad(screen_vec) = [];
+    
+    rejected_coords(~rejected_coords) = screen_vec;
     
     % Save intermediate results
     if param.save_all
@@ -239,8 +250,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         R_it(:,k) = radius;
         % Store screening vector per iteration
 %         screen_it(:,k) = screen_vec;
-        screen_it(:,k) = screen_it(:,k-1);
-        screen_it(~screen_it(:,k-1),k) = screen_vec;
+        screen_it(:,k) = rejected_coords;
         % Store iteration values
 %         x_it(:, k) = x;
         if save_x_it, x_it(~screen_it(:,k), k) = x; end  
@@ -268,7 +278,7 @@ end
 % zero-padding solution
 x_old = x;
 x = zeros(m,1);
-x(~screen_it(:,k)) = x_old;
+x(~rejected_coords) = x_old;
 
 %reseting alpha
 precalc.alpha = precalc.alpha_coord;

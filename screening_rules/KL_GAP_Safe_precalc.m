@@ -40,6 +40,9 @@ if (nargin < 5) || isempty(precalc) % recompute everything
     % Norm of the columns of A
 %     precalc.normA = sqrt(sum(A.^2)).';
     precalc.normA = sqrt(sum(A(y~=0,:).^2)).'; %improved screening! ignoring lines of A s.t. yi = 0
+    
+    % Sum of columns of A restricted to lines i where yi==0
+    precalc.sumA_zero = sum(A(y==0,:)).'/lambda;
 
     % if epsilon_y == 0, y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); end %neglecting zero entries in y
     y=y(y~=0); precalc.pinvAi_1 = precalc.pinvAi_1(y~=0); disp('GAP Safe Radius: neglecting zero entries in y (even for epsilon_y != 0)');
