@@ -4,18 +4,18 @@ addpath('./datasets/')
 rng(10), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n');
 
 %==== User parameters ====
-mc_it = 2; %100 % Number of noise realizations
+mc_it = 1; %100 % Number of noise realizations
 plots = false;
 param.save_all = true;
 param.verbose = false;
 param.stop_crit = 'gap'; 
-param.TOL = 1e-9; %-1 to run until max iteration
-param.MAX_ITER = 1e6;
+param.TOL = 1e-7; %-1 to run until max iteration
+param.MAX_ITER = 5e4;
 epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
-lambdas_rel = 1E-6; %logspace(-6,-10,9); %logspace(-1,-12,100); %logspace(-8,-12,100); %logspace(-2,0,100); % regularization (relative to lambda_max) %(0.01:0.01:1.1)
+lambdas_rel = [1e-1 1e-2 1e-3];  %logspace(-6,-10,9); %logspace(-1,-12,100); % regularization (relative to lambda_max) %(0.01:0.01:1.1)
 
 warm_start = false;
 
@@ -35,8 +35,8 @@ elseif strcmp(noise_type,'gaussian_snr')
 end
 
 if strcmp(exp_type,'synthetic')
-    n = 200; %20; 
-    m = 400; %40;
+    n = 10; %20; 
+    m = 20; %40;
     sp_ratio = 0.1; %Non-zero entries ratio in x_golden
     nnz_x = sp_ratio*m; % number of nonzero entries of the solution x             
     regenerate_A = false; % Used in the synthetic experiments only
@@ -59,38 +59,59 @@ x0_SPIRALscr = ones(m,1);
 %gap_factor = zeros(size(lambdas_rel)); % ration between duality gap and the biggest screened entry in MM
 
 %==== Storage variables ====
+%Sparsity
+l1_norm_CoD = zeros(size(lambdas_rel));
 l1_norm_MM = zeros(size(lambdas_rel));
 l1_norm_SPIRAL = zeros(size(lambdas_rel));
-% sparsity_ratio_MM = zeros(size(lambdas_rel));
-sparsity_ratio_MM_direct = zeros(size(lambdas_rel));
-sparsity_ratio_SPIRAL_direct = zeros(size(lambdas_rel));
-screen_ratio = zeros(size(lambdas_rel));
-screen_ratio_it = zeros(param.MAX_ITER,length(lambdas_rel));
+sparsity_ratio_CoD = zeros(size(lambdas_rel));
+sparsity_ratio_MM = zeros(size(lambdas_rel));
+sparsity_ratio_SPIRAL = zeros(size(lambdas_rel));
+%
+%Screening ratio
+screen_ratio_CoD = zeros(size(lambdas_rel));
+screen_ratio_MM = zeros(size(lambdas_rel));
+screen_ratio_SPIRAL = zeros(size(lambdas_rel));
+if mc_it == 1 %screening ration per iteration
+    screen_ratio_it_CoD = zeros(param.MAX_ITER,length(lambdas_rel));
+    screen_ratio_it_MM = zeros(param.MAX_ITER,length(lambdas_rel));
+    screen_ratio_it_SPIRAL = zeros(param.MAX_ITER,length(lambdas_rel));
+end
+%
+%Reconstruction error - TODO
 rec_err_euc_SPIRAL = zeros(size(lambdas_rel));
 rec_err_KL_SPIRAL = zeros(size(lambdas_rel));
 input_error_euc = 0; input_error_KL = 0;
 %
-%time
-time_CoD = zeros(size(lambdas_rel));
-time_CoDscr = zeros(size(lambdas_rel));
-time_MM = zeros(size(lambdas_rel));
-time_MMscr = zeros(size(lambdas_rel));
-time_SPIRAL = zeros(size(lambdas_rel));
-time_SPIRALscr = zeros(size(lambdas_rel));
+%Nb iterations
+nb_iter_CoD = zeros(length(lambdas_rel),mc_it);
+nb_iter_CoDscr = zeros(length(lambdas_rel),mc_it);
+nb_iter_MM = zeros(length(lambdas_rel),mc_it);
+nb_iter_MMscr = zeros(length(lambdas_rel),mc_it);
+nb_iter_SPIRAL = zeros(length(lambdas_rel),mc_it);
+nb_iter_SPIRALscr = zeros(length(lambdas_rel),mc_it);
+% nb_iter_SPIRALscr = zeros(size(lambdas_rel));
+%
+%Time
+time_CoD = zeros(length(lambdas_rel),mc_it);
+time_CoDscr = zeros(length(lambdas_rel),mc_it);
+time_MM = zeros(length(lambdas_rel),mc_it);
+time_MMscr = zeros(length(lambdas_rel),mc_it);
+time_SPIRAL = zeros(length(lambdas_rel),mc_it);
+time_SPIRALscr = zeros(length(lambdas_rel),mc_it);
 %time_FISTA = zeros(size(lambdas_rel));
-time_precalc = zeros(size(lambdas_rel));
+time_precalc = zeros(length(lambdas_rel),mc_it);
 %
 %time: various convergence thresholds
-time_CoD_various = zeros(5, length(lambdas_rel));
-time_CoDscr_various = zeros(5, length(lambdas_rel));
-time_MM_various = zeros(5, length(lambdas_rel));
-time_MMscr_various = zeros(5, length(lambdas_rel));
-time_SPIRAL_various = zeros(5, length(lambdas_rel));
-time_SPIRALscr_various = zeros(5, length(lambdas_rel));
+time_CoD_various = zeros(5, length(lambdas_rel),mc_it);
+time_CoDscr_various = zeros(5, length(lambdas_rel),mc_it);
+time_MM_various = zeros(5, length(lambdas_rel),mc_it);
+time_MMscr_various = zeros(5, length(lambdas_rel),mc_it);
+time_SPIRAL_various = zeros(5, length(lambdas_rel),mc_it);
+time_SPIRALscr_various = zeros(5, length(lambdas_rel),mc_it);
 
 % ==== Main loop ====
 for k_mc = 1:mc_it
-k_mc
+k_mc, tic
 
 %Generate problem and input data
 if strcmp(exp_type,'synthetic')
@@ -137,11 +158,13 @@ lambdas = lambdas_rel*lambda_max;
 
 for k_lambda = 1:length(lambdas)
     lambda = lambdas(k_lambda);
+    fprintf('\n ---- Regularization parameter %d / %d ----\n',k_lambda, length(lambdas))
 
     %Precalculations for Screening tests
     tPrecalc = tic;
     precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y, precalc);
-    time_precalc(k_lambda) = time_precalc(k_lambda) + toc(tPrecalc)/mc_it;
+%     time_precalc(k_lambda) = time_precalc(k_lambda) + toc(tPrecalc)/mc_it;
+    time_precalc(k_lambda,k_mc) = toc(tPrecalc);
 
     %Coordinate Descent - Hsieh2011
     fprintf('CoD solver...\n')
@@ -165,7 +188,7 @@ for k_lambda = 1:length(lambdas)
     fprintf('MM solver + Screening...\n')
     [x_MMscr, obj_MMscr, x_it_MMscr, R_it_MMscr, screen_it_MMscr, stop_crit_it_MMscr, time_it_MMscr] ...
         = KL_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
-
+    
     %SPIRAL
     fprintf('SPIRAL solver...\n')
     [x_SPIRAL, obj_SPIRAL, x_it_SPIRAL, stop_crit_it_SPIRAL, time_it_SPIRAL, step_it_SPIRAL] ...
@@ -231,6 +254,7 @@ for k_lambda = 1:length(lambdas)
     
     %% Storing results
     %L1-norm
+    l1_norm_CoD(k_lambda) = l1_norm_CoD(k_lambda) + norm(x_CoD,1)/mc_it;
     l1_norm_MM(k_lambda) = l1_norm_MM(k_lambda) + norm(x_MM,1)/mc_it;
     l1_norm_SPIRAL(k_lambda) = l1_norm_SPIRAL(k_lambda) + norm(x_SPIRAL,1)/mc_it;
 
@@ -238,30 +262,65 @@ for k_lambda = 1:length(lambdas)
 %     theta = (1/lambda)  * (y-A*x_MM)./(A*x_MM + param.epsilon);
 %     certificate = A.'*theta;
 %     sparsity_ratio_MM(k_lambda) = sparsity_ratio_MM(k_lambda) + sum(certificate<1-1e-10)/(m*mc_it);
-    sparsity_ratio_MM_direct(k_lambda) = sparsity_ratio_MM_direct(k_lambda) + sum(x_MM< 1e-10)/(m*mc_it); %x_MM<=max(1e-10*max(x_MM),eps)
-    sparsity_ratio_SPIRAL_direct(k_lambda) = sparsity_ratio_SPIRAL_direct(k_lambda) + sum(x_SPIRAL<1e-10)/(m*mc_it); %x_SPIRAL<=1e-10*max(x_SPIRAL)
+    sparsity_ratio_MM(k_lambda) = sparsity_ratio_MM(k_lambda) + sum(x_MM< 1e-10)/(m*mc_it); %x_MM<=max(1e-10*max(x_MM),eps)
+    sparsity_ratio_CoD(k_lambda) = sparsity_ratio_CoD(k_lambda) + sum(x_CoD < eps)/(m*mc_it);
+    sparsity_ratio_SPIRAL(k_lambda) = sparsity_ratio_SPIRAL(k_lambda) + sum(x_SPIRAL< eps)/(m*mc_it); %x_SPIRAL<=1e-10*max(x_SPIRAL)
     
     % Screen ratio
-    screen_ratio(k_lambda) = screen_ratio(k_lambda) + sum(screen_it_MMscr(:,end))/(m*mc_it);
-    screen_ratio_it(:,k_lambda) = screen_ratio_it(:,k_lambda) + padarray(sum(screen_it_MMscr).',size(screen_ratio_it,1)-length(stop_crit_it_MMscr),'replicate','post')/(m*mc_it);
+    screen_ratio_CoD(k_lambda) = screen_ratio_CoD(k_lambda) + sum(screen_it_CoDscr(:,end))/(m*mc_it);
+    screen_ratio_MM(k_lambda) = screen_ratio_MM(k_lambda) + sum(screen_it_MMscr(:,end))/(m*mc_it);
+    screen_ratio_SPIRAL(k_lambda) = screen_ratio_SPIRAL(k_lambda) + sum(screen_it_SPIRALscr(:,end))/(m*mc_it);
+    %per iteration - padding array until MAX_ITER
+    if mc_it == 1
+        screen_ratio_it_CoD(:,k_lambda) = screen_ratio_it_CoD(:,k_lambda) + padarray(sum(screen_it_CoDscr).',size(screen_ratio_it_CoD,1)-length(stop_crit_it_CoDscr),'replicate','post')/(m*mc_it);
+        screen_ratio_it_MM(:,k_lambda) = screen_ratio_it_MM(:,k_lambda) + padarray(sum(screen_it_MMscr).',size(screen_ratio_it_MM,1)-length(stop_crit_it_MMscr),'replicate','post')/(m*mc_it);
+        screen_ratio_it_SPIRAL(:,k_lambda) = screen_ratio_it_SPIRAL(:,k_lambda) + padarray(sum(screen_it_SPIRALscr).',size(screen_ratio_it_SPIRAL,1)-length(stop_crit_it_SPIRALscr),'replicate','post')/(m*mc_it);
+    end
+    
+    % Nb Iterations
+%     nb_iter_CoD(k_lambda) = nb_iter_CoD(k_lambda) + length(stop_crit_it_CoD)/mc_it;
+%     nb_iter_CoDscr(k_lambda) = nb_iter_CoDscr(k_lambda) + length(stop_crit_it_CoDscr)/mc_it;
+%     nb_iter_MM(k_lambda) = nb_iter_MM(k_lambda) + length(stop_crit_it_MM)/mc_it;
+%     nb_iter_MMscr(k_lambda) = nb_iter_MMscr(k_lambda) + length(stop_crit_it_MMscr)/mc_it;
+%     nb_iter_SPIRAL(k_lambda) = nb_iter_SPIRAL(k_lambda) + length(stop_crit_it_SPIRAL)/mc_it;
+%     nb_iter_SPIRALscr(k_lambda) = nb_iter_SPIRALscr(k_lambda) + length(stop_crit_it_SPIRALscr)/mc_it;
+    nb_iter_CoD(k_lambda,k_mc) = length(stop_crit_it_CoD);
+    nb_iter_CoDscr(k_lambda,k_mc) = length(stop_crit_it_CoDscr);
+    nb_iter_MM(k_lambda,k_mc) = length(stop_crit_it_MM);
+    nb_iter_MMscr(k_lambda,k_mc) = length(stop_crit_it_MMscr);
+    nb_iter_SPIRAL(k_lambda,k_mc) = length(stop_crit_it_SPIRAL);
+    nb_iter_SPIRALscr(k_lambda,k_mc) = length(stop_crit_it_SPIRALscr);
     
     % Time
-    time_CoD(k_lambda) = time_CoD(k_lambda) + time_it_CoD(end)/mc_it;
-    time_CoDscr(k_lambda) = time_CoDscr(k_lambda) + time_it_CoDscr(end)/mc_it;    
-    time_MM(k_lambda) = time_MM(k_lambda) + time_it_MM(end)/mc_it;
-    time_MMscr(k_lambda) = time_MMscr(k_lambda) + time_it_MMscr(end)/mc_it;
-    time_SPIRAL(k_lambda) = time_SPIRAL(k_lambda) + time_it_SPIRAL(end)/mc_it;
-    time_SPIRALscr(k_lambda) = time_SPIRALscr(k_lambda) + time_it_SPIRALscr(end)/mc_it;
-    %time_FISTA(k_lambda) = time_FISTA(k_lambda) + time_it_FISTA(end)/mc_it;
+%     time_CoD(k_lambda) = time_CoD(k_lambda) + time_it_CoD(end)/mc_it;
+%     time_CoDscr(k_lambda) = time_CoDscr(k_lambda) + time_it_CoDscr(end)/mc_it;    
+%     time_MM(k_lambda) = time_MM(k_lambda) + time_it_MM(end)/mc_it;
+%     time_MMscr(k_lambda) = time_MMscr(k_lambda) + time_it_MMscr(end)/mc_it;
+%     time_SPIRAL(k_lambda) = time_SPIRAL(k_lambda) + time_it_SPIRAL(end)/mc_it;
+%     time_SPIRALscr(k_lambda) = time_SPIRALscr(k_lambda) + time_it_SPIRALscr(end)/mc_it;
+%     %time_FISTA(k_lambda) = time_FISTA(k_lambda) + time_it_FISTA(end)/mc_it;    
+    time_CoD(k_lambda,k_mc) = time_it_CoD(end);
+    time_CoDscr(k_lambda,k_mc) = time_it_CoDscr(end);
+    time_MM(k_lambda,k_mc) = time_it_MM(end);
+    time_MMscr(k_lambda,k_mc) = time_it_MMscr(end);
+    time_SPIRAL(k_lambda,k_mc) = time_it_SPIRAL(end);
+    time_SPIRALscr(k_lambda,k_mc) = time_it_SPIRALscr(end);
+    %time_FISTA(k_lambda) = time_it_FISTA(end)/mc_it;
     
     % Time for various convergence thresholds
     for kk = 1:5
-        time_CoD_various(kk,k_lambda) = time_CoD_various(kk,k_lambda) + min([inf time_it_CoD(find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1))/mc_it]);
-        time_CoDscr_various(kk,k_lambda) = time_CoDscr_various(kk,k_lambda) + min([inf time_it_CoDscr(find(stop_crit_it_CoDscr<10^(5-kk)*param.TOL,1))/mc_it]);
-        time_MM_various(kk,k_lambda) = time_MM_various(kk,k_lambda) + min([inf time_it_MM(find(stop_crit_it_MM<10^(5-kk)*param.TOL,1))/mc_it]);
-        time_MMscr_various(kk,k_lambda) = time_MMscr_various(kk,k_lambda) + min([inf time_it_MMscr(find(stop_crit_it_MMscr<10^(5-kk)*param.TOL,1))/mc_it]);
-        time_SPIRAL_various(kk,k_lambda) = time_SPIRAL_various(kk,k_lambda) + min([inf time_it_SPIRAL(find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1))/mc_it]);
-        time_SPIRALscr_various(kk,k_lambda) = time_SPIRALscr_various(kk,k_lambda) + min([inf time_it_SPIRALscr(find(stop_crit_it_SPIRALscr<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_CoD_various(kk,k_lambda) = time_CoD_various(kk,k_lambda) + min([inf time_it_CoD(find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_CoDscr_various(kk,k_lambda) = time_CoDscr_various(kk,k_lambda) + min([inf time_it_CoDscr(find(stop_crit_it_CoDscr<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_MM_various(kk,k_lambda) = time_MM_various(kk,k_lambda) + min([inf time_it_MM(find(stop_crit_it_MM<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_MMscr_various(kk,k_lambda) = time_MMscr_various(kk,k_lambda) + min([inf time_it_MMscr(find(stop_crit_it_MMscr<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_SPIRAL_various(kk,k_lambda) = time_SPIRAL_various(kk,k_lambda) + min([inf time_it_SPIRAL(find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1))/mc_it]);
+%         time_SPIRALscr_various(kk,k_lambda) = time_SPIRALscr_various(kk,k_lambda) + min([inf time_it_SPIRALscr(find(stop_crit_it_SPIRALscr<10^(5-kk)*param.TOL,1))/mc_it]);
+        time_CoD_various(kk,k_lambda,k_mc) = min([inf time_it_CoD(find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1))]);
+        time_CoDscr_various(kk,k_lambda,k_mc) = min([inf time_it_CoDscr(find(stop_crit_it_CoDscr<10^(5-kk)*param.TOL,1))]);
+        time_MM_various(kk,k_lambda,k_mc) = min([inf time_it_MM(find(stop_crit_it_MM<10^(5-kk)*param.TOL,1))]);
+        time_MMscr_various(kk,k_lambda,k_mc) = min([inf time_it_MMscr(find(stop_crit_it_MMscr<10^(5-kk)*param.TOL,1))]);
+        time_SPIRAL_various(kk,k_lambda,k_mc) = min([inf time_it_SPIRAL(find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1))]);
+        time_SPIRALscr_various(kk,k_lambda,k_mc) = min([inf time_it_SPIRALscr(find(stop_crit_it_SPIRALscr<10^(5-kk)*param.TOL,1))]);
     end
     
     % Reconstruction error
@@ -272,14 +331,17 @@ for k_lambda = 1:length(lambdas)
 end
 input_error_euc = input_error_euc + norm(y_orig - y)/mc_it;
 input_error_KL = input_error_KL + KL_err(y)/mc_it;
+toc
 end
 
 % Saving results
 if length(lambdas) == 1 && mc_it ==  1 %save coordinates evolution separately (heavy)
-    save(['./Results/preliminary/new_main_KL_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_CoordEvolution.mat'],'x_it_MMscr')
+    save(['./Results/new_main_KL_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_CoordEvolution.mat'],'x_it_MMscr', 'screen_it_MMscr')
 end
 clear x_it_CoD x_it_CoDscr x_it_MM x_it_MMscr x_it_SPIRAL x_it_SPIRALscr % cleaning variables not used for plots
-save(['./Results/preliminary/new_main_KL_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '.mat'])
+clear screen_it_CoDscr screen_it_MMscr screen_it_SPIRALscr % cleaning variables not used for plots
+save(['./Results/new_main_KL_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '.mat'])
+
 
 %% Plots
 if plots 
@@ -332,7 +394,7 @@ if plots
         title('Coordinates evolution')
         xlabel('Iteration number'), ylabel('Coordinate value')
 
-        % Screening per iteration
+        % Screening per iteration       
         figure
         subplot(2,1,1)
         imagesc(screen_it_MMscr), colormap gray
@@ -379,22 +441,33 @@ if plots
         set(0,'DefaultTextInterpreter','latex'), set(0,'DefaultLegendInterpreter','latex')
         % Sparsity ratio vs. lambda
         figure, hold on,title('Sparsity ratio')
-        plot(lambdas_rel,sparsity_ratio_MM_direct)
-        plot(lambdas_rel,sparsity_ratio_SPIRAL_direct), 
-        plot(lambdas_rel, screen_ratio)
-        legend('MM', 'SPIRAL', 'screen ratio')
+        plot(lambdas_rel,sparsity_ratio_CoD),
+        plot(lambdas_rel,sparsity_ratio_MM),
+        plot(lambdas_rel,sparsity_ratio_SPIRAL), 
+        plot(lambdas_rel, screen_ratio_CoD),
+        plot(lambdas_rel, screen_ratio_MM),
+        plot(lambdas_rel, screen_ratio_SPIRAL),
+        legend('CoD', 'MM', 'SPIRAL', 'screen ratio CoD', 'screen ratio MM', 'screen ratio SPIRAL')
         xlabel('Regularization ($\lambda / \lambda_{max}$)','Interpreter','latex')
         ylabel('Sparsity (\% of zeros)')
         % L1-norm ratio vs. lambda
-        figure, plot(lambdas_rel,l1_norm_MM)
+        figure, hold on, title('L1 norm vs. Regularization level')
+        plot(lambdas_rel,l1_norm_CoD)
+        plot(lambdas_rel,l1_norm_MM)
+        plot(lambdas_rel,l1_norm_SPIRAL)
+        legend('CoD', 'MM', 'SPIRAL', 'screen ratio')
         xlabel('Regularization ($\lambda / \lambda_{max}$)','Interpreter','latex')
         ylabel('$\ell_1$-norm of the solution')
-        % Colormap
-        figure,
-        imagesc(lambdas_rel,1:param.MAX_ITER,screen_ratio_it,[0 1]), colorbar
-        title('Screening ratio (\% of coordinates)')
-        xlabel('Regularization ($\lambda / \lambda_{max}$)','Interpreter','latex')
-        ylabel('Iteration number')
+        % Colormap Screening ratio
+        if mc_it == 1
+            figure,
+            subplot(1,3,1), imagesc(lambdas_rel,1:param.MAX_ITER,screen_ratio_it_CoD,[0 1]), colorbar
+            subplot(1,3,2), imagesc(lambdas_rel,1:param.MAX_ITER,screen_ratio_it_MM,[0 1]), colorbar
+            subplot(1,3,3), imagesc(lambdas_rel,1:param.MAX_ITER,screen_ratio_it_SPIRAL,[0 1]), colorbar
+            title('Screening ratio (\% of coordinates)')
+            xlabel('Regularization ($\lambda / \lambda_{max}$)','Interpreter','latex')
+            ylabel('Iteration number')
+        end
         
         % Reconstruction error
         %SNR
