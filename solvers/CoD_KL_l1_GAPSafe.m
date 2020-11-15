@@ -211,6 +211,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
 
     % Remove screened coordinates (and corresponding atoms)
+    if(any(x(screen_vec)~=0)), Ax = Ax - A(:,screen_vec)*x(screen_vec);end %Update Ax when nonzero entries in x are screened.
 %     A = A(:,~screen_vec);
 %     x = x(~screen_vec);
 %     precalc.normA = precalc.normA(~screen_vec);
