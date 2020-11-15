@@ -68,7 +68,7 @@ radius = sqrt(2*gap/precalc.alpha);
 
 
 %Teste: feedback loop alpha_r <--> r
-improving = false; k=0;  %true for adaptive local screening!
+improving = precalc.improving; k=0;  %true for adaptive local screening!
 while improving
     denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
 %     denominator_r = min( denominator_r , precalc.denominator );
