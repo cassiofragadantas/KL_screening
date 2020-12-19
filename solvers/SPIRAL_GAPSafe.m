@@ -134,7 +134,7 @@ M = 10; % Number of past iterations considered
 obj = zeros(1, param.MAX_ITER);
 obj(1) = g.eval(x) + f.eval(Ax);
 if param.save_all
-    R_it = zeros(4, param.MAX_ITER); % Safe region radius by iteration. TODO, reduce to 1 radius only
+    R_it = zeros(1, param.MAX_ITER); % Safe region radius by iteration. TODO, reduce to 1 radius only
     screen_it = false(m, param.MAX_ITER); % Safe region radius by iteration
     stop_crit_it = zeros(1, param.MAX_ITER);
     stop_crit_it(1) = inf;
@@ -247,7 +247,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     % Save intermediate results
     if param.save_all
         % Store safe sphere radius
-        R_it(:,k) = radius;
+        R_it(k) = radius;
         % Store screening vector per iteration
 %         screen_it(:,k) = screen_vec;
         screen_it(:,k) = rejected_coords;
@@ -286,7 +286,7 @@ precalc.alpha = precalc.alpha_coord;
 if param.save_all
     % Trim down stored results
     obj = obj(1:k);
-    R_it = R_it(:,1:k);
+    R_it = R_it(1:k);
     screen_it = screen_it(:,1:k);    
     stop_crit_it = stop_crit_it(1:k);
     step_it = step_it(1:k);

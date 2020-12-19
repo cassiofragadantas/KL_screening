@@ -1,18 +1,19 @@
-function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
-% KL_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
-% problem that uses Kullback-Leibler divergence as the data-fidelity term :
+function [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
+% Beta_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
+% problem that uses beta divergence (beta=1.5) as the data-fidelity term :
 % 
-% (1)                  min_(x>=0) D_KL(y, Ax) + lambda*norm(x,1)
+% (1)                  min_(x>=0) D_beta(y, Ax) + lambda*norm(x,1)
 %
-% where lambda is a sparsity regularization term D_KL(a,b) is the Kullback 
-% Leibler divergence between vectors a and b, which, in turn, can be 
+% where lambda is a sparsity regularization term D_beta(a,b) is the beta
+% divergence (beta=1.5) between vectors a and b, which, in turn, can be 
 % written in terms of a scalar divergence between each of the entries a_i, 
-% b_i of vectors a and b, as follows:
+% b_i of vectors a and b, as follows taking beta=1.5:
 % 
-%   d_KL(a_i,b_i) = a_i log(a_i/b_i) - a_i + b_i
+%   d_beta(a_i,b_i) = 1/(beta*(beta-1)) (a_i^beta + (beta-1)b_i^beta
+%                                             - beta a_i b_i^(beta-1) )
 %
 % This functions therefore seeks a sparse vector x such that y ≈ Ax in the
-% Kullback-Leibler sense.
+% beta divergence sense.
 %
 % This function returns a binary vector of the same size as x,
 % containing 1 (true) in all screened entries (those identified not 
@@ -44,35 +45,28 @@ function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, g
 %             safer rules for the Lasso. 32nd ICML (2015).
 %
 % Author: Cassio F. Dantas
-% Date: 30 Mar 2020
+% Date: 16 Nov 2020
 
 if (nargin < 7), epsilon_y = 0; end
+y = y + epsilon_y;
 
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
 
 %% Safe sphere definition
-%==== Other - wrong ====
-%radius(1) = sqrt(2*gap)*(1+lambda*precalc.pinvA_1)/(lambda*sqrt(precalc.sumy)); %Wrong! But seems to work!
-%radius(1) = gap*(1+lambda*precalc.pinvA_1)/(lambda*precalc.miny); %Wrong! dual "inverse-Lipschitz"
-%radius(1) = sqrt(2*gap*(precalc.maxy*precalc.A_inf*precalc.A_1))/(lambda*epsilon); %0) primal Lispchitz gradient (direct extension of GAP journal paper)
 
-%==== Hessian based ====
-%Wrong! Does not consider negative theta entries
-% radius(1) = sqrt(2*gap/precalc.alpha_all_old);
-% radius(2) = sqrt(2*gap/precalc.alpha_coord_old);
-
-%Correct! Try to go back to the old ones, as experimentally they seem safe
-% radius(1) = sqrt(2*gap/precalc.alpha_all); %Separated min (not optimal)
 radius = sqrt(2*gap/precalc.alpha);
 
 
 %Teste: feedback loop alpha_r <--> r
 improving = precalc.improving; k=0;  %true for adaptive local screening!
 while improving
-    denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
-%     denominator_r = min( denominator_r , precalc.denominator );
-    alpha_r = lambda^2 * min( (y(y~=0)+epsilon_y)./(denominator_r) );
+    d = lambda*(theta+radius);
+    d(y==0) = min(-lambda*sqrt(epsilon), d(y==0)); %intersecting with SO
+    d(y~=0) = min(precalc.b, d(y~=0)); %negligeable practical relevance
+    alphai = lambda^2*( (d.^2 + 2*y)./sqrt(d.^2 + 4*y) - d );
+    alpha_r = min(alphai);
+
     radius_new = sqrt(2*gap/alpha_r);
     improvement = (radius - radius_new);
     if improvement > 0

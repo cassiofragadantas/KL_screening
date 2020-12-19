@@ -1,19 +1,23 @@
-function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = CoD_KL_l1_GAPSafe(A, y, lambda, x0, param, precalc)
-% KL_l1_MM a Majoration-minimization approach to solve a non-negative 
-% l1-regularized problem that uses the Kullback-Leibler divergence as the 
+function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = Beta_l1_MM_GAPSafe(A, y, lambda, x0, param, precalc)
+% Beta_l1_MM a Majoration-minimization approach to solve a non-negative 
+% l1-regularized problem that uses the Beta divergence (beta = 1.5) as the 
 % data-fidelity term :
 % 
-% (1)                  min_(x>=0) D_KL(y, Ax) + lambda*norm(x,1)
+% (1)                  min_(x>=0) D_beta(y, Ax) + lambda*norm(x,1)
 %
-% where lambda is a sparsity regularization term D_KL(a,b) is the Kullback 
-% Leibler divergence between vectors a and b, which, in turn, can be 
+% where lambda is a sparsity regularization term D_beta(a,b) is the beta
+% divergence between vectors a and b, which, in turn, can be 
 % written in terms of a scalar divergence between each of the entries a_i, 
-% b_i of vectors a and b, as follows:
+% b_i of vectors a and b, as follows for beta \in [0,2]:
 % 
-%   d_KL(a_i,b_i) = a_i log(a_i/b_i) - a_i + b_i
+%   d_beta(a_i,b_i) = 1/(beta*(beta-1)) (a_i^beta + (beta-1)b_i^beta
+%                                             - beta a_i b_i^(beta-1) )
 %
 % This functions therefore seeks a sparse vector x such that y ≈ Ax in the
-% Kullback-Leibler sense.
+% beta divergence sense.
+%
+% THIS IMPLEMENTATION ONLY WORKS WITH BETA=1.5 DUE TO THE COMPUTATION OF
+% THE DUAL OBJECTIVE FUNCTION (which is specific for each beta value).
 %
 %   Required inputs:
 %       A   : (n x m) matrix.
@@ -57,13 +61,12 @@ function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = CoD_KL_l1_GAPSa
 %   References:
 %
 % Author: Cassio F. Dantas
-% Date: 17 Mar 2020
+% Date: 12 Nov 2020
 
 %% Input parsing
 
 assert(nargin >= 2, 'A (matrix), y (vector) and lambda (scalar) must be provided.');
 % x0 = A.'*y; % If x0 not provided
-A = full(A); y = full(y);%current C implementation does not support sparse matrices
 
 % problem dimensions (n,m)
 assert(length(size(A)) == 2, 'Input variable A should be a matrix')
@@ -86,21 +89,21 @@ if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'stop_crit'); param.stop_crit = 'difference'; end
 if ~isfield(param, 'epsilon'); param.epsilon = 0; end
 if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
-% nb_portions = 10;
-% idx_portions = round(linspace(0,m,nb_portions+1));
+% if ~isfield(param, 'beta'); param.beta = 1.5; end, beta = param.beta;
 
 % objective function
-%f.eval = @(a,b) sum(a.*log(a./b) - a + b); % KL distance
-if param.epsilon_y == 0
-    f.eval = @(a) sum(y(y~=0).*log(y(y~=0)./(a(y~=0)+ param.epsilon))) + sum(- y + a + param.epsilon - param.epsilon_y); % force 0*log(0) = 0 (instead of NaN) 
-else
-    f.eval = @(a) sum((y+param.epsilon_y).*log((y+param.epsilon_y)./(a+param.epsilon)) - y + a + param.epsilon - param.epsilon_y); % KL distance (fixing first variable as y) with optional epsilon regularizer
-end
+%generic beta
+%%f.eval = @(u,v) 1/(beta*(beta-1)) * sum( u.^beta + (beta-1)*v.^beta - beta*u.*v.^(beta-1)); %beta divergence
+% f.eval = @(a) 1/(beta*(beta-1)) * sum( (y+param.epsilon_y).^beta + (beta-1)*(a + param.epsilon).^beta ...
+%               - beta*(y+param.epsilon_y).*(a + param.epsilon).^(beta-1)); %beta divergence
+%beta = 1.5
+f.eval = @(a) 4/3 * sum( (y+param.epsilon_y).^1.5 + (1/2)*(a + param.epsilon).^(1.5) ...
+              - (3/2)*(y+param.epsilon_y).*sqrt(a + param.epsilon)); %beta divergence
 g.eval = @(a) lambda*norm(a, 1); % regularization
 
 tStart = tic;
 %% Initialization
-x = x0 + 0; % Signal to find (+0 avoid x to be just a pointer to x0)
+x = x0; % Signal to find
 k = 1;  % Iteration number
 stop_crit = Inf; % Difference between solutions in successive iterations
 % screen_vec = false(size(x));
@@ -109,8 +112,8 @@ rejected_coords = false(m,1);
 idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
-if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
-% A2 = A.^2; %used for greedy version of CoD. Uncomment this and l.151-160
+
+if (nargin < 6), precalc = beta_GAP_Safe_precalc(A,y,lambda,param.epsilon, param.epsilon_y); end % Initialize screening rule, if not given as an input
 
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
@@ -136,62 +139,66 @@ if param.save_time
     time_it(1) = toc(tStart); % time for initializations 
 end
 
-%% CoD iterations
+%% MM iterations
 while (stop_crit > param.TOL) && (k < param.MAX_ITER)
    
     k = k + 1;
     if param.verbose, fprintf('%4d,',k); end
     
-    x_old = x + 0; % +0 avoids x_old to be modified within the MEX function
+    x_old = x;
     
-    % Update x and Ax(from Hsieh-Dhillon2011 Coord Descent)
-    %C implementation. (attention! the value of x is changed inside the MEX function)
-%     x = CoD_KL_l1_update_slow(y+param.epsilon_y, A.', x, Ax+param.epsilon, lambda); Ax = A*x;
-%     [x, Ax] = CoD_KL_l1_update_noeps(y+param.epsilon_y, A, x, Ax+param.epsilon, lambda); Ax = Ax - param.epsilon; %the Ax 
-    CoD_KL_l1_update(y, A, x, Ax, lambda, param.epsilon, param.epsilon_y); %implemented in C   
-    %Update coordinates by batches (portions)
-%     portion = mod(k-2,nb_portions)+1;
-%     CoD_KL_l1_update_portion(y, A, x, Ax, lambda, param.epsilon,idx_portions(portion),idx_portions(portion+1)); %implemented in C    
-    %Matlab implementation (for loop)
-%     for k_coord = 1:m
-%         tmp = (y+param.epsilon_y)./(Ax+param.epsilon);
-%         tmp2 = tmp./(Ax+param.epsilon);
-%         g1 = A(:,k_coord).'*(1-tmp);
-%         g2 = (A(:,k_coord).^2).'*(tmp2);
-%         x(k_coord) = max(0, x(k_coord) -(g1+lambda)/g2);
-%         Ax = Ax + (x(k_coord)-x_old(k_coord))*A(:,k_coord);
-%     end
-    %Updating all coordinates simultaneously would require the inverse Hessian
-    % CoD with "best-improvement" coordinate choice (naive implementation)
-%     for count = 1:round(sqrt(m)) %1:m
-%         tmp = (y+param.epsilon_y)./(Ax+param.epsilon);
-%         tmp2 = tmp./(Ax+param.epsilon);
-%         g1_all = A.'*(1-tmp);
-%         g2_all = (A2).'*(tmp2);
-%         [~, idx] = max(abs(x - max(0, x - (g1_all+lambda)./g2_all)));
-%         x_old(idx) = x(idx);
-%         x(idx) = max(0, x(idx) -(g1_all(idx)+lambda)/g2_all(idx));
-%         Ax = Ax + (x(idx)-x_old(idx))*A(:,idx);
-%     end
+    % Update x
+    %Generic beta divergence (convex only for beta >= 1)
+%     Axbeta1 = (Ax+param.epsilon).^(beta-1);
+%     yAxbeta2 = (y+param.epsilon_y).*(Ax+param.epsilon).^(beta-2);
+    %beta=1.5
+    Axbeta1 = sqrt(Ax+param.epsilon);
+    yAxbeta2 = (y+param.epsilon_y)./Axbeta1; %valid in this particular case
+    
+    %All together
+    ATAxbeta1 = A.'*Axbeta1;
+    ATyAxbeta2 = A.'*(yAxbeta2);
+    x = x.*(ATyAxbeta2) ./ (ATAxbeta1 + lambda);
+    %
+    %spliting y=0 and y~=0 - Slow...
+% %     A_y0 = A(idx_y0,:); A_ny0 = A(~idx_y0,:);
+%     ATAxbeta1_y0 = A(idx_y0,:).'*Axbeta1(idx_y0); %A_y0
+%     ATAxbeta1_ny0 = A(~idx_y0,:).'*Axbeta1(~idx_y0); %A_ny0
+%     ATyAxbeta2_y0 = A(idx_y0,:).'*yAxbeta2(idx_y0);
+%     ATyAxbeta2_ny0 = A(~idx_y0,:).'*yAxbeta2(~idx_y0);
+%     x = x.*(ATyAxbeta2_y0 + ATyAxbeta2_ny0) ./ (ATAxbeta1_y0 + ATAxbeta1_ny0 + lambda);
+    
 
-    % Update dual point
-    theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
-    ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
-    scaling = max(1,max(ATtheta));
+    % Update A*x for next iteration
+    % (also used in Gap stopping criterion and in GAP Safe rule)
+    Ax = A*x; % avoid recalculating this
+
+    % Update dual point     
+    %All together
+    ATtheta = (1/lambda)*(ATyAxbeta2 - ATAxbeta1);
+    theta = (yAxbeta2 - Axbeta1)/lambda;
+%     scaling = max( [1, max(ATtheta), max(theta(y~=0)*lambda./precalc.b)] ); %previous implementation
+    scaling = max([1, max(ATtheta)]);
+    ATtheta = ATtheta/scaling;
     theta = theta/scaling; %dual scaling (or: max(ATtheta))
-    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
-        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
-        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
-    end
-    if any(theta<-1/lambda-eps), warning('some theta_i < -1/lambda'); end
+    %
+    %Make sure min(theta(idx_y0))< -sqrt(param.epsilon)/lambda) (theoretically, unecessary on the adaptive approach)
+    %
+    theta(~idx_y0) = min(theta(~idx_y0),precalc.b/lambda); %these mins are almost never change theta
+    theta(idx_y0) = min(theta(idx_y0),-sqrt(param.epsilon)/lambda);
+    %
+%     theta(idx_y0) = theta(idx_y0)*scaling; %previous implementation
+    %
+    %Recompute ATtheta (since theta might have changed) for screening test
+    %Slow!we don't do it, and that's ok because the new ATtheta is necessarily
+    %smaller or equals to the previous one and it doesn't seem to affect screening performance.
+%     ATtheta = A.'*theta;
+
     
     % Stopping criterion
     primal = f.eval(Ax) + g.eval(x) ;
-    if param.epsilon_y == 0
-        dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
-    else
-        dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-    end
+    %/!\ only true for beta = 1.5
+    dual = sum( (4*(y+param.epsilon_y).^1.5 + 0.5*(lambda*theta).^3 - 0.5*((lambda*theta).^2 + 4*(y+param.epsilon_y)).^1.5 + 3*(lambda*theta).*(y+param.epsilon_y))/3 - param.epsilon*(lambda*theta) );
     
     gap = primal - dual; % gap has to be calculated anyway for GAP_Safe
     
@@ -203,24 +210,16 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     % Screening
-    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
-    
-    %Test! coordinate-wise limit for dual function 
-%     theta_max = max(precalc.A_1/lambda,1)*pinvAi_1.';
-%     dual_imax = (y + param.epsilon).*log(1+lambda*theta_max) - (lambda*param.epsilon*theta_max);
-    
+    [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, param.epsilon_y);
 
     % Remove screened coordinates (and corresponding atoms)
-    if(any(x(screen_vec)~=0)), Ax = Ax - A(:,screen_vec)*x(screen_vec);end %Update Ax when nonzero entries in x are screened.
 %     A = A(:,~screen_vec);
 %     x = x(~screen_vec);
 %     precalc.normA = precalc.normA(~screen_vec);
     A(:,screen_vec) = []; 
     x(screen_vec) = []; 
     precalc.normA(screen_vec) = [];
-    precalc.sumA_zero(screen_vec) = [];
-%     A2(:,screen_vec) = []; %uncomment this for greedy variant of CoD
-
+    
     rejected_coords(~rejected_coords) = screen_vec;
     
     % Save intermediate results
@@ -250,9 +249,6 @@ end
 x_old = x;
 x = zeros(m,1);
 x(~rejected_coords) = x_old;
-
-%reseting alpha
-precalc.alpha = precalc.alpha_coord;
 
 if param.save_all
     % Trim down stored results

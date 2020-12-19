@@ -72,10 +72,6 @@ precalc.alpha = precalc.alpha_coord; %This one will be updated over the iteratio
 
 precalc.improving = false; %'true' for adaptive alpha, 'false' for fixed alpha
 
-%WRONG: without the max - old radius (but does not consider theta negative entries)
-% precalc.alpha_all_old = lambda^2 * min(y+epsilon_y)/(1 + lambda*precalc.pinvA_1).^2;  %separated min (less performant)
-% precalc.alpha_coord_old = lambda^2 * min( (y+epsilon_y)./(1 + lambda*precalc.pinvAi_1.').^2 ); %coordinate-wise min
-
 % Primal and Dual objective functions handle
 % Used only if not already calculated by Gap stopping criterion
 % precalc.primal = @(Ax,x) sum((y+epsilon_y).*log((y+epsilon_y)./(Ax+epsilon)) - y + Ax) + lambda*norm(x,1);
