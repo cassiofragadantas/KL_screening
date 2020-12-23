@@ -1,15 +1,17 @@
 addpath('./solvers/')
 addpath('./screening_rules/')
 addpath('./datasets/')
-rng(10), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n');
+rng_seed = 10; % 0 for no seed
+if rng_seed, rng(10), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n'); end
 
 %==== User parameters ====
 mc_it = 1; %100 % Number of noise realizations
 param.save_all = true; %Solvers will store all intermediate variables
 param.verbose = false;
 param.stop_crit = 'gap'; 
-param.TOL = 1e-7; %-1 to run until max iteration (1e-8*min(nnz(y),n-nnz(y))/n)
-param.MAX_ITER = 5e4;
+param.TOL_rel = 1e-7; %-1 to run until max iteration (1e-8*min(nnz(y),n-nnz(y))/n)
+normalized_TOL = false; %Normalizes to the data scaling
+param.MAX_ITER = 1e6;
 epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
@@ -26,7 +28,13 @@ save_coordinates_evolution = false; %True for MM synthetic experiment
 problem_type = 'KL'; % Options: 'logistic', 'KL', 'beta15'
 noise_type = 'none'; % Options: 'poisson', 'gaussian_std', 'gaussian_snr', otherwise: no noise.
 exp_type = 'NIPSpapers'; % Options: 'synthetic', or some real dataset 
-            % (e.g. 'TasteProfile', '20newsgroups', 'NIPSpapers', 'Encyclopedia', 'MNIST')
+                         % Count data (KL): 
+                         %     'TasteProfile', '20newsgroups', 'NIPSpapers', 'Encyclopedia', 'MNIST'
+                         % Classification (Logistic): 
+                         %     'Leukemia', 'Colon-cancer'
+                         % Hyperspectral (beta-div): 
+                         %     'Cuprite', 'Cuprite_subsampled', 'Moffett', 'Madonna'
+                         %     'Cuprite_USGS-lib', 'Urban_USGS-lib' (using USGS spectral library as dictionary)
 param.normalizeA = true;
 param.ymult = 5; %~5: for y with lots of zero entries. Synthetic experiment only.
             
@@ -129,6 +137,7 @@ end
 
 input_error_euc = 0; input_error_KL = 0;
 time_precalc = zeros(length(lambdas_rel),mc_it);
+normy2 = zeros(1,mc_it);
 
 % ==== Main loop ====
 for k_mc = 1:mc_it
@@ -151,13 +160,18 @@ if strcmp(exp_type,'synthetic')
         y_orig = A*abs(full(x_golden)); %y = abs(randn(n,1));
     end    
 else %Real dataset
-    %Draw a random entry to be the input signal
-    if param.normalizeA, y_orig = y_orig/normA(idx_y); end
-    A = [A(:,1:(idx_y-1)) y_orig A(:,(idx_y):end)];
-    idx_y = randi(m+1);
-    y_orig = A(:,idx_y);
-    A = A(:,[1:(idx_y-1) (idx_y+1):(m+1)]);
-    if param.normalizeA, y_orig = round(y_orig*normA(idx_y)); end
+    if any(strcmp(exp_type,{'Cuprite_USGS-lib', 'Urban_USGS-lib'}))
+        y_orig = Y_orig(:,k_mc);
+        y_orig = y_orig./norm(y_orig); %normalize columns
+    elseif ~any(strcmp(exp_type,{'Leukemia','Leukemia_mod','Colon-cancer','Colon-cancer_mod'}))
+        %Draw a random entry to be the input signal
+        if param.normalizeA, y_orig = y_orig/normA(idx_y); end
+        A = [A(:,1:(idx_y-1)) y_orig A(:,(idx_y):end)];
+        idx_y = randi(m+1);
+        y_orig = A(:,idx_y);
+        A = A(:,[1:(idx_y-1) (idx_y+1):(m+1)]);
+        if param.normalizeA && strcmp(problem_type,'KL'), y_orig = round(y_orig*normA(idx_y)); end
+    end
 end
 
 %Add noise
@@ -171,6 +185,7 @@ else % no noise
     y = y_orig;
 end
 assert(all(y>=0),'Input signal should only have positive entries.')
+normy2(k_mc) = norm(y,2)^2;
 
 %Keep only non-zero entries in y
 % idx = (y~=0); y=y(idx); A = A(idx,:); n = length(y);
@@ -195,6 +210,18 @@ end
 
 lambdas = lambdas_rel*lambda_max; 
 
+%Stopping criterion
+if normalized_TOL 
+    if strcmp(problem_type,'logistic')
+        param.TOL = param.TOL_rel*min(sum(y),n-sum(y))/n; 
+    else 
+        param.TOL = param.TOL_rel*norm(y,2)^2; 
+    end
+else
+    param.TOL = param.TOL_rel;
+end
+
+
 for k_lambda = 1:length(lambdas)
     lambda = lambdas(k_lambda);
     fprintf('\n ---- Regularization parameter %d / %d ----\n',k_lambda, length(lambdas))
@@ -204,9 +231,9 @@ for k_lambda = 1:length(lambdas)
     if strcmp(problem_type,'KL')
         precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y, precalc);
     elseif strcmp(problem_type,'beta15')
-        precalc = Beta_GAP_Safe_precalc(A,y,lambda,param.epsilon, param.epsilon_y);
+        precalc = Beta_GAP_Safe_precalc(A,y+param.epsilon_y,lambda,param.epsilon);
     elseif strcmp(problem_type,'logistic')
-        precalc = LogReg_GAP_Safe_precalc(A,y,lambda,param.epsilon, param.epsilon_y);
+        precalc = LogReg_GAP_Safe_precalc(A,y,lambda);
     else
         error('\nType of problem not implemented! Check problem_type variable.')
     end
@@ -298,13 +325,13 @@ end
 % Saving results
 clear A
 if save_coordinates_evolution %save coordinates evolution separately (heavy)
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_CoordEvolution.mat'],'x_it_MMscr', 'screen_it_MMscr')
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '_CoordEvolution.mat'],'x_it_MMscr', 'screen_it_MMscr')
 end
 
 clear x_it_CoD x_it_CoDscr x_it_CoDscr_adap x_it_CoDscr_global x_it_MM x_it_MMscr x_it_MMscr_adap x_it_SPIRAL x_it_SPIRALscr x_it_SPIRALscr_adap % cleaning variables not used for plots
 if length(lambdas) == 1 && mc_it ==  1 % Medium weight (keep screening coordinates evolution)
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '.mat'])
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
 else %Light save
     clear screen_it_CoDscr screen_it_CoDscr_adap screen_it_CoDscr_global screen_it_MMscr screen_it_MMscr_adap screen_it_SPIRALscr screen_it_SPIRALscr_adap % cleaning variables not used for plots
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '.mat'])
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
 end

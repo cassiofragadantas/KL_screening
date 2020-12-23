@@ -109,11 +109,11 @@ stop_crit = Inf; % Difference between solutions in successive iterations
 % screen_vec = false(size(x));
 rejected_coords = false(m,1);
 
-idx_y0 = (y==0);
+% idx_  y0 = (y+param.epsilon_y==0);
 
 Ax = A*x; % For first iteration
 
-if (nargin < 6), precalc = beta_GAP_Safe_precalc(A,y,lambda,param.epsilon, param.epsilon_y); end % Initialize screening rule, if not given as an input
+if (nargin < 6), precalc = beta_GAP_Safe_precalc(A,y+param.epsilon_y,lambda,param.epsilon); end % Initialize screening rule, if not given as an input
 
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
@@ -182,10 +182,10 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     ATtheta = ATtheta/scaling;
     theta = theta/scaling; %dual scaling (or: max(ATtheta))
     %
-    %Make sure min(theta(idx_y0))< -sqrt(param.epsilon)/lambda) (theoretically, unecessary on the adaptive approach)
-    %
-    theta(~idx_y0) = min(theta(~idx_y0),precalc.b/lambda); %these mins are almost never change theta
-    theta(idx_y0) = min(theta(idx_y0),-sqrt(param.epsilon)/lambda);
+    %Make sure min(theta(idx_y0))< -sqrt(param.epsilon)/lambda) and b/lambda (theoretically, unecessary on the adaptive approach)
+    theta = min(theta, precalc.b/lambda); %this min are almost never change theta
+%     theta(~idx_y0) = min(theta(~idx_y0),precalc.b/lambda); %these mins are almost never change theta
+%     theta(idx_y0) = min(theta(idx_y0),-sqrt(param.epsilon)/lambda);
     %
 %     theta(idx_y0) = theta(idx_y0)*scaling; %previous implementation
     %
@@ -210,7 +210,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     % Screening
-    [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, param.epsilon_y);
+    [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y+param.epsilon_y);
 
     % Remove screened coordinates (and corresponding atoms)
 %     A = A(:,~screen_vec);

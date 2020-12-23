@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
+function [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y) % idx_y0, epsilon)
 % Beta_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % problem that uses beta divergence (beta=1.5) as the data-fidelity term :
 % 
@@ -47,8 +47,6 @@ function [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta,
 % Author: Cassio F. Dantas
 % Date: 16 Nov 2020
 
-if (nargin < 7), epsilon_y = 0; end
-y = y + epsilon_y;
 
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
@@ -62,9 +60,12 @@ radius = sqrt(2*gap/precalc.alpha);
 improving = precalc.improving; k=0;  %true for adaptive local screening!
 while improving
     d = lambda*(theta+radius);
-    d(y==0) = min(-lambda*sqrt(epsilon), d(y==0)); %intersecting with SO
-    d(y~=0) = min(precalc.b, d(y~=0)); %negligeable practical relevance
+    d = min(d, precalc.b);
+%     d(idx_y0) = min(-sqrt(epsilon), d(idx_y0)); %intersecting with SO
+%     d(~idx_y0) = min(precalc.b, d(~idx_y0)); %negligeable practical relevance
     alphai = lambda^2*( (d.^2 + 2*y)./sqrt(d.^2 + 4*y) - d );
+    % In theory, alphai is always positive, but there can be numerical instabilites (see detailed comment in Beta_GAP_Safe_precalc.m)
+    if any(alphai<=0), alphai = lambda^2*(2*y.^2./(d.^3+4*y.*d)); end
     alpha_r = min(alphai);
 
     radius_new = sqrt(2*gap/alpha_r);

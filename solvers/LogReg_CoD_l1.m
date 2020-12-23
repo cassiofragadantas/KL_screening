@@ -79,7 +79,7 @@ if ~isfield(param, 'epsilon'); param.epsilon = 0; end
 if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 
 % objective function
-f.eval = @(a) sum(log(1 + exp(a)) - y.*a); % Binary logistic cost
+f.eval = @(a) sum(log(1 + exp(a)) - y.*a); % Binary logistic cost. Could also use log1p(x) = log(1+x)
 % f.eval = @(a,b) sum(log(1 + b) - y.*a); % a=Ax, b=exp(Ax)
 g.eval = @(a) lambda*norm(a, 1); % regularization
 
@@ -157,8 +157,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         %Dual point
         theta = res/lambda; % Feasible dual point calculation
         ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
-        theta = theta/max(1,max(ATtheta)); %dual scaling (or: max(ATtheta))
-%         ATtheta = ATtheta/max(ATtheta);
+        theta = theta/max(1,norm(ATtheta,'inf')); %dual scaling
+%         ATtheta = ATtheta/norm(ATtheta,'inf');
         
         primal = f.eval(Ax) + g.eval(x) ;
         dual = h(y-lambda*theta);

@@ -1,4 +1,4 @@
-function precalc = LogReg_GAP_Safe_precalc(A, y, lambda, epsilon, epsilon_y, precalc)
+function precalc = LogReg_GAP_Safe_precalc(A, y, lambda, precalc)
 % This function performs some precalculation required as input in function 
 % LogReg_GAP_Safe
 %
@@ -17,7 +17,7 @@ function precalc = LogReg_GAP_Safe_precalc(A, y, lambda, epsilon, epsilon_y, pre
 % Author: Cassio F. Dantas
 % Date: 16 Nov 2020
 
-if (nargin < 6) || isempty(precalc) % recompute everything
+if (nargin < 4) || isempty(precalc) % recompute everything
 
     % || pinv(A) ||_1 = || pinv(A.') ||_inf
     % try %there might be a memory issue

@@ -101,6 +101,7 @@ if lambda == 1 && mc_it ==  1 % single run plots
     subplot(1,2,1), hold on
     semilogy(R_it_MMscr(1,2:end))
     semilogy(R_it_MMscr_adap(1,2:end),'--')
+    set(gca, 'YScale', 'log')
     xlabel('Iteration number'), ylabel('Radius')
     subplot(1,2,2), hold on
     plot(2*stop_crit_it_MMscr(2:end)./R_it_MMscr(1,2:end).^2)

@@ -104,7 +104,7 @@ Ax = A*x;
 expAx = exp(Ax);
 res =  y -  expAx./(1+expAx); %residual
 
-if (nargin < 6), precalc = LogReg_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
+if (nargin < 6), precalc = LogReg_GAP_Safe_precalc(A,y,lambda); end % Initialize screening rule, if not given as an input
 
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
@@ -163,7 +163,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     % Update dual point
     theta = res/lambda; % Feasible dual point calculation
     ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
-    scaling = max(1,max(ATtheta));
+    scaling = max(1,norm(ATtheta,'inf'));
     theta = theta/scaling; %dual scaling
     ATtheta = ATtheta/scaling;
     
@@ -182,7 +182,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     % Screening
-    [screen_vec, radius, precalc] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
+    [screen_vec, radius, precalc] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y);
 
     % Remove screened coordinates (and corresponding atoms)
     if(any(x(screen_vec)~=0)), Ax = Ax - A(:,screen_vec)*x(screen_vec);end %Update Ax when nonzero entries in x are screened.
