@@ -26,7 +26,7 @@ fprintf('CoD solver LogReg + Screening ...\n')
 
 precalc.improving = true;
 fprintf('CoD solver LogReg + Screening w/ refinement ...\n')
-[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap] ...
+[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap, alpha_redef_CoDscr_adap(k_lambda,k_mc)] ...
     = LogReg_CoD_l1_GAPSafe(A,y,lambda,x0_CoDscr,param,precalc);    
 precalc.improving = false;
 

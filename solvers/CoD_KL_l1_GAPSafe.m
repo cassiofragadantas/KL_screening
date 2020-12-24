@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = CoD_KL_l1_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it, count_alpha] = CoD_KL_l1_GAPSafe(A, y, lambda, x0, param, precalc)
 % KL_l1_MM a Majoration-minimization approach to solve a non-negative 
 % l1-regularized problem that uses the Kullback-Leibler divergence as the 
 % data-fidelity term :
@@ -109,9 +109,12 @@ rejected_coords = false(m,1);
 idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
+radius = inf; theta = 0;
+
 if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
 % A2 = A.^2; %used for greedy version of CoD. Uncomment this and l.151-160
 
+count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
     obj(1) =  f.eval(Ax) + g.eval(x) ;
@@ -175,6 +178,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 %     end
 
     % Update dual point
+    theta_old = theta;
     theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
     ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
     scaling = max(1,max(ATtheta));
@@ -201,6 +205,14 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         stop_crit = norm(x - x_old, 2);
     end
     if param.verbose, stop_crit, end
+    
+    % Redefine current alpha if necessary
+    if precalc.improving && (norm(theta - theta_old) > radius)
+        count_alpha = count_alpha + 1;
+        radius = norm(theta - theta_old);
+        denominator_r = (1 + lambda*(theta_old + radius)).^2 ; denominator_r = denominator_r(y~=0);
+        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
+    end
     
     % Screening
     [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);

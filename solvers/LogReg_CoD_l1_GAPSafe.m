@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = LogReg_CoD_l1_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it, count_alpha] = LogReg_CoD_l1_GAPSafe(A, y, lambda, x0, param, precalc)
 % LogReg_CoD_l1 is a Coordinate Descent approach to solve the
 % l1-regularized Binary Logistic regression problem :
 % 
@@ -103,9 +103,11 @@ rejected_coords = false(m,1);
 Ax = A*x;
 expAx = exp(Ax);
 res =  y -  expAx./(1+expAx); %residual
+radius = inf; theta = 0;
 
 if (nargin < 6), precalc = LogReg_GAP_Safe_precalc(A,y,lambda); end % Initialize screening rule, if not given as an input
 
+count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
     obj(1) =  f.eval(Ax) + g.eval(x) ;
@@ -161,6 +163,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     end
 
     % Update dual point
+    theta_old = theta;
     theta = res/lambda; % Feasible dual point calculation
     ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
     scaling = max(1,norm(ATtheta,'inf'));
@@ -180,6 +183,14 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         stop_crit = norm(x - x_old, 2);
     end
     if param.verbose, stop_crit, end
+    
+    % Redefine current alpha if necessary
+    if precalc.improving && (norm(theta - theta_old) > radius)
+        count_alpha = count_alpha + 1;
+        radius = norm(theta - theta_old);
+        tmp =  max(0, min(abs(lambda*theta_old - y + 1/2)) - lambda*radius);
+        precalc.alpha = 4*lambda^2/(1 - 4*tmp^2);
+    end
     
     % Screening
     [screen_vec, radius, precalc] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y);

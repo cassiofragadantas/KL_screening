@@ -18,7 +18,7 @@ fprintf('CoD solver KL + Screening...\n')
 
 precalc.improving = true;
 fprintf('CoD solver KL + Screening w/ refinement...\n')
-[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap] ...
+[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap, alpha_redef_CoDscr_adap(k_lambda,k_mc)] ...
     = CoD_KL_l1_GAPSafe(A,y,lambda,x0_CoDscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha_coord;
@@ -35,7 +35,7 @@ fprintf('MM solver KL + Screening...\n')
 
 precalc.improving = true;
 fprintf('MM solver KL + Screening w/ refinement...\n')
-[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap] ...
+[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap, alpha_redef_MMscr_adap(k_lambda,k_mc)] ...
     = KL_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha_coord;
@@ -52,7 +52,7 @@ fprintf('SPIRAL solver KL + Screening...\n')
 
 precalc.improving = true;
 fprintf('SPIRAL solver KL + Screening w/ refinement...\n')
-[x_SPIRALscr_adap, obj_SPIRALscr_adap, x_it_SPIRALscr_adap, R_it_SPIRALscr_adap, screen_it_SPIRALscr_adap, stop_crit_it_SPIRALscr_adap, time_it_SPIRALscr_adap] ...
+[x_SPIRALscr_adap, obj_SPIRALscr_adap, x_it_SPIRALscr_adap, R_it_SPIRALscr_adap, screen_it_SPIRALscr_adap, stop_crit_it_SPIRALscr_adap, time_it_SPIRALscr_adap, alpha_redef_SPIRALscr_adap(k_lambda,k_mc)] ...
     = SPIRAL_GAPSafe(A,y,lambda,x0_SPIRALscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha_coord;

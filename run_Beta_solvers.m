@@ -21,7 +21,7 @@ fprintf('MM solver BETA DIV + Screening ...\n')
 
 precalc.improving = true;
 fprintf('MM solver BETA DIV + Screening w/ refinement...\n')
-[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap] ...
+[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap, alpha_redef_MMscr_adap(k_lambda,k_mc)] ...
     = Beta_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha0;

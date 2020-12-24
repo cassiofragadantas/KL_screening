@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it] = Beta_l1_MM_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it, count_alpha] = Beta_l1_MM_GAPSafe(A, y, lambda, x0, param, precalc)
 % Beta_l1_MM a Majoration-minimization approach to solve a non-negative 
 % l1-regularized problem that uses the Beta divergence (beta = 1.5) as the 
 % data-fidelity term :
@@ -112,9 +112,12 @@ rejected_coords = false(m,1);
 % idx_  y0 = (y+param.epsilon_y==0);
 
 Ax = A*x; % For first iteration
+radius = inf; theta = 0;
 
 if (nargin < 6), precalc = beta_GAP_Safe_precalc(A,y+param.epsilon_y,lambda,param.epsilon); end % Initialize screening rule, if not given as an input
 
+
+count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
     obj(1) =  f.eval(Ax) + g.eval(x) ;
@@ -173,7 +176,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     % (also used in Gap stopping criterion and in GAP Safe rule)
     Ax = A*x; % avoid recalculating this
 
-    % Update dual point     
+    % Update dual point
+    theta_old = theta;
     %All together
     ATtheta = (1/lambda)*(ATyAxbeta2 - ATAxbeta1);
     theta = (yAxbeta2 - Axbeta1)/lambda;
@@ -208,6 +212,19 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         stop_crit = norm(x - x_old, 2);
     end
     if param.verbose, stop_crit, end
+    
+    
+    % Redefine current alpha if necessary
+    if precalc.improving && (norm(theta - theta_old) > radius)
+        count_alpha = count_alpha + 1;
+        radius = norm(theta - theta_old);
+        d = lambda*(theta_old+radius);
+        d = min(d, precalc.b);
+        alphai = lambda^2*( (d.^2 + 2*y)./sqrt(d.^2 + 4*y) - d );
+        % In theory, alphai is always positive, but there can be numerical instabilites (see detailed comment in Beta_GAP_Safe_precalc.m)
+        if any(alphai<=0), alphai = lambda^2*(2*y.^2./(d.^3+4*y.*d)); end
+        precalc.alpha = min(alphai);
+    end
     
     % Screening
     [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y+param.epsilon_y);

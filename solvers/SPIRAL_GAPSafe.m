@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it, stop_crit_it, time_it, step_it] = SPIRAL_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it, stop_crit_it, time_it, count_alpha, step_it] = SPIRAL_GAPSafe(A, y, lambda, x0, param, precalc)
 % This function implements a particular case of the SPIRAL-TAP algorithm
 % proposed in [1] and available at:
 %
@@ -116,6 +116,7 @@ Ax = A*x; % For first iteration
 rho = y - Ax + param.epsilon_y - param.epsilon;
 if poisson_noise, rho = rho./(Ax+param.epsilon); end
 grad = -A.'*rho;        
+radius = inf; theta = 0;
 
 stop_crit = Inf; % Difference between solutions in successive iterations
 
@@ -131,6 +132,7 @@ sigma = 0.1;     % between 0 and 1
 M = 10; % Number of past iterations considered
 
 % ---- Storage variables ----
+count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 obj = zeros(1, param.MAX_ITER);
 obj(1) = g.eval(x) + f.eval(Ax);
 if param.save_all
@@ -203,6 +205,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     grad = -A.'*rho; % heavy    
 
     %Dual point
+    theta_old = theta;
     ATtheta = -grad./lambda;
     scaling = max(1,max(ATtheta));
     theta = rho/(lambda*scaling); %dual scaling (or: max(ATtheta)))
@@ -229,6 +232,14 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     end
     if param.verbose, stop_crit, end
 
+    % Redefine current alpha if necessary
+    if precalc.improving && (norm(theta - theta_old) > radius)
+        count_alpha = count_alpha + 1;
+        radius = norm(theta - theta_old);
+        denominator_r = (1 + lambda*(theta_old + radius)).^2 ; denominator_r = denominator_r(y~=0);
+        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
+    end
+    
     % Screening
     [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
 
