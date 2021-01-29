@@ -3,10 +3,10 @@ addpath('./solvers/')
 addpath('./screening_rules/')
 addpath('./datasets/')
 rng_seed = 10; % 0 for no seed
-if rng_seed, rng(10), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n'); end
+if rng_seed, rng(rng_seed), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n'); end
 
 %==== User parameters ====
-mc_it = 1; %100 % Number of noise realizations
+mc_it = 1; % Number of noise realizations
 param.save_all = true; %Solvers will store all intermediate variables
 param.verbose = false;
 param.stop_crit = 'gap'; 
@@ -17,7 +17,7 @@ epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
-lambdas_rel = [1e-1 1e-2 1e-3];  %logspace(-3,0,20);  % regularization (relative to lambda_max) 
+lambdas_rel = 1e-2;  %logspace(-3,0,22);  %[1e-1 1e-2 1e-3];  %logspace(-3,0,100);  % regularization (relative to lambda_max) 
 
 warm_start = false;
 
@@ -26,14 +26,16 @@ param.euc_dist = false; %If true, runs SPIRAL and FISTA in standard lasso proble
 save_coordinates_evolution = false; %True for MM synthetic experiment
 
 %==== Problem parameters ====
-problem_type = 'logistic'; % Options: 'logistic', 'KL', 'beta15'
+problem_type = 'beta15'; % Options: 'logistic', 'KL', 'beta15'
 noise_type = 'none'; % Options: 'poisson', 'gaussian_std', 'gaussian_snr', otherwise: no noise.
 exp_type = 'synthetic'; % Options: 'synthetic', or some real dataset 
                          % Count data (KL): 
                          %     'TasteProfile', '20newsgroups', 'NIPSpapers', 'Encyclopedia', 'MNIST'
                          % Classification (Logistic): 
                          %     'Leukemia', 'Colon-cancer'
+                         %     'Leukemia_mod', 'Colon-cancer_mod'
                          % Hyperspectral (beta-div): 
+                         %     'Urban', 'Urban_subsampled'
                          %     'Cuprite', 'Cuprite_subsampled', 'Moffett', 'Madonna'
                          %     'Cuprite_USGS-lib', 'Urban_USGS-lib' (using USGS spectral library as dictionary)
 param.normalizeA = true;
@@ -46,8 +48,8 @@ elseif strcmp(noise_type,'gaussian_snr')
 end
 
 if strcmp(exp_type,'synthetic')
-    n = 50; %10; %20;
-    m = 200; %20; %40;
+    n = 100; %10;
+    m = 1000; %20;
     
     regenerate_A = false; % Used in the synthetic experiments only
     sp_ratio = 0.1; %Non-zero entries ratio in x_golden
@@ -99,7 +101,7 @@ if CoD
     screen_ratio_CoD = zeros(size(lambdas_rel)); 
     screen_ratio_CoD_adap = zeros(size(lambdas_rel)); 
     if strcmp(problem_type,'logistic'), screen_ratio_CoD_global = zeros(size(lambdas_rel)); end
-    if mc_it == 1 %Screening ratio per iteration
+    if true %mc_it == 1 %Screening ratio per iteration
         screen_ratio_it_CoD = zeros(param.MAX_ITER,length(lambdas_rel)); 
         screen_ratio_it_CoD_adap = zeros(param.MAX_ITER,length(lambdas_rel));
         if strcmp(problem_type,'logistic'), screen_ratio_it_CoD_global = zeros(param.MAX_ITER,length(lambdas_rel)); end
@@ -141,7 +143,7 @@ if MM
     %Screening ratio
     screen_ratio_MM = zeros(size(lambdas_rel)); 
     screen_ratio_MM_adap = zeros(size(lambdas_rel)); 
-    if mc_it == 1 %Screening ratio per iteration
+    if true %mc_it == 1 %Screening ratio per iteration
         screen_ratio_it_MM = zeros(param.MAX_ITER,length(lambdas_rel)); 
         screen_ratio_it_MM_adap = zeros(param.MAX_ITER,length(lambdas_rel)); 
     end 
@@ -172,7 +174,7 @@ if PG
     %Screening ratio
     screen_ratio_SPIRAL = zeros(size(lambdas_rel)); 
     screen_ratio_SPIRAL_adap = zeros(size(lambdas_rel)); 
-    if mc_it == 1 %Screening ratio per iteration
+    if true %mc_it == 1 %Screening ratio per iteration
         screen_ratio_it_SPIRAL = zeros(param.MAX_ITER,length(lambdas_rel));
         screen_ratio_it_SPIRAL_adap = zeros(param.MAX_ITER,length(lambdas_rel));
     end
@@ -225,6 +227,7 @@ if strcmp(exp_type,'synthetic')
         end
         x_golden = param.ymult*sprand(m,1,sp_ratio);
         y_orig = A*abs(full(x_golden)); %y = abs(randn(n,1));
+        y_orig = y_orig/norm(y_orig);
     end    
 else %Real dataset
     if any(strcmp(exp_type,{'Cuprite_USGS-lib', 'Urban_USGS-lib'}))
@@ -232,12 +235,13 @@ else %Real dataset
         y_orig = y_orig./norm(y_orig); %normalize columns
     elseif ~any(strcmp(exp_type,{'Leukemia','Leukemia_mod','Colon-cancer','Colon-cancer_mod'}))
         %Draw a random entry to be the input signal
-        if param.normalizeA, y_orig = y_orig/normA(idx_y); end
+        if param.normalizeA, y_orig = y_orig/norm(y_orig); end
         A = [A(:,1:(idx_y-1)) y_orig A(:,(idx_y):end)];
         idx_y = randi(m+1);
         y_orig = A(:,idx_y);
         A = A(:,[1:(idx_y-1) (idx_y+1):(m+1)]);
-        if param.normalizeA && strcmp(problem_type,'KL'), y_orig = round(y_orig*normA(idx_y)); end
+        % Uncomment line below for not normalizing y (so that it has integer entries)
+%         if param.normalizeA && strcmp(problem_type,'KL'), y_orig = round(y_orig*normA(idx_y)); end
     end
 end
 
@@ -355,7 +359,7 @@ for k_lambda = 1:length(lambdas)
         screen_ratio_SPIRAL_adap(k_lambda) = screen_ratio_SPIRAL_adap(k_lambda) + sum(screen_it_SPIRALscr_adap(:,end))/(m*mc_it); 
     end
     %per iteration - padding array until MAX_ITER
-    if mc_it == 1
+    if true %mc_it == 1
         if CoD
             screen_ratio_it_CoD(:,k_lambda) = screen_ratio_it_CoD(:,k_lambda) + padarray(sum(screen_it_CoDscr).',size(screen_ratio_it_CoD,1)-length(stop_crit_it_CoDscr),'replicate','post')/(m*mc_it); 
             screen_ratio_it_CoD_adap(:,k_lambda) = screen_ratio_it_CoD_adap(:,k_lambda) + padarray(sum(screen_it_CoDscr_adap).',size(screen_ratio_it_CoD_adap,1)-length(stop_crit_it_CoDscr_adap),'replicate','post')/(m*mc_it); 
@@ -482,17 +486,19 @@ end
 % Saving results
 clear A
 if save_coordinates_evolution %save coordinates evolution separately (heavy)
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '_CoordEvolution.mat'],'x_it_MMscr', 'screen_it_MMscr')
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_' num2str(length(lambdas)) 'lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '_CoordEvolution.mat'], 'x_it_MM', 'x_it_MMscr', 'x_it_MMscr_adap', 'screen_it_MMscr', 'screen_it_MMscr_adap')
 end
 
 clear x_it_CoD x_it_CoDscr x_it_CoDscr_adap x_it_CoDscr_global x_it_MM x_it_MMscr x_it_MMscr_adap x_it_SPIRAL x_it_SPIRALscr x_it_SPIRALscr_adap % cleaning variables not used for plots
-if length(lambdas) == 1 && mc_it ==  1 % Medium weight (keep screening coordinates evolution)
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
+if length(lambdas) == 1 && mc_it ==  1 % Medium weight (keep all but screening coordinates evolution)
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_' num2str(length(lambdas)) 'lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
 else %Light save
     clear screen_it_CoDscr screen_it_CoDscr_adap screen_it_CoDscr_global screen_it_MMscr screen_it_MMscr_adap screen_it_SPIRALscr screen_it_SPIRALscr_adap % cleaning variables not used for plots
     clear R_it_CoDscr R_it_CoDscr_adap R_it_CoDscr_global R_it_MMscr R_it_MMscr_adap R_it_SPIRALscr R_it_SPIRALscr_adap    
     clear obj_CoD obj_CoDscr obj_CoDscr_adap obj_CoD_global obj_MM obj_MMscr obj_MMscr_adap obj_SPIRAL obj_SPIRALscr obj_SPIRALscr_adap
     clear stop_crit_it_CoD stop_crit_it_CoDscr stop_crit_it_CoDscr_adap stop_crit_it_CoD_global stop_crit_it_MM stop_crit_it_MMscr stop_crit_it_MMscr_adap stop_crit_it_SPIRAL stop_crit_it_SPIRALscr stop_crit_it_SPIRALscr_adap
     clear time_it_CoD time_it_CoDscr time_it_CoDscr_adap time_it_CoD_global time_it_MM time_it_MMscr time_it_MMscr_adap time_it_SPIRAL time_it_SPIRALscr time_it_SPIRALscr_adap
-    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
+    save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_' num2str(length(lambdas)) 'lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
 end
+
+plot_results

@@ -1,7 +1,88 @@
 %% Plots
 set(0,'DefaultTextInterpreter','latex'), set(0,'DefaultLegendInterpreter','latex');
 
-if lambda == 1 && mc_it ==  1 % single run plots
+if length(lambda) == 1 && mc_it ==  1 % single run plots
+        
+    if CoD
+        % 1) Convergence vs time
+        figure, subplot(2,1,1), legends = {'Alg. 2','Alg. 3'};
+        title(['$CoD solver, \lambda / \lambda_{max} = 10^{' num2str(log10(lambdas_rel(1))) '} $'])
+        semilogy(time_it_CoD, stop_crit_it_CoD,'k'); hold on
+        if strcmp(problem_type,'logistic') 
+            semilogy(time_it_CoDscr_global, stop_crit_it_CoDscr_global,'g');
+            legends = ['Alg. 1' legends];
+        end
+        semilogy(time_it_CoDscr, stop_crit_it_CoDscr);
+        semilogy(time_it_CoDscr_adap, stop_crit_it_CoDscr_adap);
+        legends = ['CoD' legends];
+        ylabel('Duality gap'), xlabel('Time [s]')
+        legend(legends); grid on
+        
+        % 2) Screening ratio per iteration
+        subplot(2,1,2), hold on, legends = {'Alg. 2','Alg. 3'}; 
+        if strcmp(problem_type,'logistic') 
+            plot(screen_ratio_it_CoD_global(1:nb_iter_CoDscr_global),'g');
+            legends = ['Alg. 1' legends];
+        end
+        plot(screen_ratio_it_CoD(1:nb_iter_CoDscr));
+        plot(screen_ratio_it_CoD_adap(1:nb_iter_CoDscr_adap));
+        xlabel('Iteration number'), ylabel('Screening ratio') %(\% of screened coordinates)
+        legend(legends,'Location', 'southeast'); grid on
+    end
+    if MM
+        % 1) Convergence vs time
+        figure, subplot(2,1,1), legends = {'Alg. 2','Alg. 3'};
+        title(['$MU solver, \lambda / \lambda_{max} = 10^{' num2str(log10(lambdas_rel(1))) '} $'])
+        semilogy(time_it_MM, stop_crit_it_MM, 'k'); hold on
+        if strcmp(problem_type,'logistic') 
+            semilogy(time_it_MMscr_global, stop_crit_it_MMscr_global, 'g');
+            legends = ['Alg. 1' legends];
+        end
+        semilogy(time_it_MMscr, stop_crit_it_MMscr);
+        semilogy(time_it_MMscr_adap, stop_crit_it_MMscr_adap);
+        legends = ['MU' legends];
+        ylabel('Duality gap'), xlabel('Time [s]')
+        legend(legends); grid on
+        
+        % 2) Screening ratio per iteration
+        subplot(2,1,2), hold on, legends = {'Alg. 2','Alg. 3'}; 
+        if strcmp(problem_type,'logistic') 
+            plot(screen_ratio_it_MM_global(1:nb_iter_MMscr_global),'g');
+            legends = ['Alg. 1' legends];
+        end
+        plot(screen_ratio_it_MM(1:nb_iter_MMscr));
+        plot(screen_ratio_it_MM_adap(1:nb_iter_MMscr_adap));
+        xlabel('Iteration number'), ylabel('Screening ratio') %(\% of screened coordinates)
+        legend(legends,'Location', 'southeast'); grid on
+    end
+    if PG
+        % 1) Convergence vs time
+        figure, subplot(2,1,1), legends = {'Alg. 2','Alg. 3'};
+        title(['$SPIRAL solver, \lambda / \lambda_{max} = 10^{' num2str(log10(lambdas_rel(1))) '} $'])
+        semilogy(time_it_SPIRAL, stop_crit_it_SPIRAL,'k'); hold on
+        if strcmp(problem_type,'logistic') 
+            semilogy(time_it_SPIRALscr_global, stop_crit_it_SPIRALscr_global, 'g');
+            legends = ['Alg. 1' legends];
+        end
+        semilogy(time_it_SPIRALscr, stop_crit_it_SPIRALscr);
+        semilogy(time_it_SPIRALscr_adap, stop_crit_it_SPIRALscr_adap);
+        legends = ['SPIRAL' legends];
+        ylabel('Duality gap'), xlabel('Time [s]')
+        legend(legends); grid on
+
+        % 2) Screening ratio per iteration
+        subplot(2,1,2), hold on, legends = {'Alg. 2','Alg. 3'}; 
+        if strcmp(problem_type,'logistic') 
+            plot(screen_ratio_it_SPIRAL_global(1:nb_iter_SPIRALscr_global),'g');
+            legends = ['Alg. 1' legends];
+        end
+        plot(screen_ratio_it_SPIRAL(1:nb_iter_SPIRALscr));
+        plot(screen_ratio_it_SPIRAL_adap(1:nb_iter_SPIRALscr_adap));
+        xlabel('Iteration number'), ylabel('Screening ratio') %(\% of screened coordinates)
+        legend(legends,'Location', 'southeast'); grid on
+    end     
+    
+elseif false % single run plots (other)
     % Convergence vs iteration
     % Gap evolution
     figure,
@@ -35,6 +116,7 @@ if lambda == 1 && mc_it ==  1 % single run plots
     %semilogy(time_it_FISTA, stop_crit_it_FISTA);
     ylabel('Duality GAP'), xlabel('Time [s]')
 
+    
     % Iteration time (ugly, since it varies...)
 %         figure, hold on
 %         plot(time_it_MM), plot(time_it_MMscr)
@@ -132,7 +214,7 @@ if lambda == 1 && mc_it ==  1 % single run plots
     title('Reconstruction error per coordinate (the closer to zero, the better!)')
     ax= gca, ax.XAxisLocation = 'origin';
 
-else % full path plots
+elseif false % full path plots
 
     set(0,'DefaultTextInterpreter','latex'), set(0,'DefaultLegendInterpreter','latex')
     % Sparsity ratio vs. lambda

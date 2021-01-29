@@ -65,7 +65,7 @@ y=y(y~=0);
 
 % alpha (strong concavity constant)
 % precalc.alpha_all = lambda^2 * min(y+epsilon_y)/(1 + max(precalc.A_1,lambda)*precalc.pinvA_1).^2;  %separated min (less performant)
-% precalc.denominator = (1 + max(precalc.A_1,lambda)*precalc.pinvAi_1.').^2; %old alpha (better than alpha_all but worse than the one below)
+% precalc.denominator = (1 + max(precalc.A_1,lambda)*precalc.pinvAi_1(y~=0).').^2; %old alpha (better than alpha_all but worse than the one below)
 precalc.denominator = min((lambda+sum(A(y~=0,:),1))./A(y~=0,:),[],2).^2;
 precalc.alpha_coord = lambda^2 * min( (y+epsilon_y)./precalc.denominator ); %coordinate-wise min
 precalc.alpha = precalc.alpha_coord; %This one will be updated over the iterations
