@@ -26,7 +26,7 @@ param.euc_dist = false; %If true, runs SPIRAL and FISTA in standard lasso proble
 save_coordinates_evolution = false; %True for MM synthetic experiment
 
 %==== Problem parameters ====
-problem_type = 'beta15'; % Options: 'logistic', 'KL', 'beta15'
+problem_type = 'logistic'; % Options: 'logistic', 'KL', 'beta15'
 noise_type = 'none'; % Options: 'poisson', 'gaussian_std', 'gaussian_snr', otherwise: no noise.
 exp_type = 'synthetic'; % Options: 'synthetic', or some real dataset 
                          % Count data (KL): 
@@ -485,6 +485,7 @@ end
 
 % Saving results
 clear A
+if ~exist('./Results/', 'dir'), mkdir('./Results/'); end
 if save_coordinates_evolution %save coordinates evolution separately (heavy)
     save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_' num2str(length(lambdas)) 'lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '_CoordEvolution.mat'], 'x_it_MM', 'x_it_MMscr', 'x_it_MMscr_adap', 'screen_it_MMscr', 'screen_it_MMscr_adap')
 end
