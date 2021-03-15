@@ -1,7 +1,7 @@
 %% Plots
 set(0,'DefaultTextInterpreter','latex'), set(0,'DefaultLegendInterpreter','latex');
 
-if length(lambda) == 1 && mc_it ==  1 % single run plots
+if length(lambdas) == 1 && mc_it ==  1 % single run plots
         
     if CoD
         % 1) Convergence vs time
