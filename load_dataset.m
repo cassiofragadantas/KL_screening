@@ -174,7 +174,31 @@ switch exp_type
         n = size(A,1);
         m = size(A,2);
         sp_ratio = nnz(A)/numel(A);
-        idx_y = 1;        
+        idx_y = 1; 
+        
+    case 'rcv1'
+        % Check if the dataset is available locally
+        if exist('rcv1_rankdef.mat','file') ~= 2
+            error( ['\nMISSING DATASET!\n', ...
+                   'Please download the Colon cancer dataset at LIBSVM:\n' ...
+                   'https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#rcv1.binary\n', ...
+                   'Python script ./datasets/LogisticRegressionData.ipynb' ... 
+                   'can be used to load the data and save as .mat format.'
+                   ],' ')
+        end
+        
+        load('rcv1.mat')
+%         load('rcv1_rankdef.mat') % Entire training dataset 20242 x 44504 (rank deficient)
+%         load('rcv1_fullrank_n1000_m9553.mat') % 1000 randomly selected samples from testing dataset, size 1000 x 9553 (full rank)
+%         load('rcv1_fullrank_n2000_m15308.mat') % 2000 randomly selected samples from testing dataset, size 2000 x 15308 (full rank)
+
+        A = full(A); y_orig = y.';
+        clear y
+        
+        n = size(A,1);
+        m = size(A,2);
+        sp_ratio = nnz(A)/numel(A);
+        idx_y = 1;  
         
     case 'Moffett'
         
