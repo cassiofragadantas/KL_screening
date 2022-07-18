@@ -56,6 +56,14 @@ function [x, obj, x_it, stop_crit_it, time_it] = Beta_l1_MM(A, y, lambda, x0, pa
 %   See also:
 %
 %   References:
+%       [1] V.Y.F. Tan and C. Févotte, "Automatic Relevance Determination
+%           in Nonnegative Matrix Factorization with the beta-Divergence,"
+%           IEEE TPAMI, 2013, doi: 10.1109/TPAMI.2012.240.
+%
+%       [2] V.Y.F. Tan and C. Févotte, Supplementary material to
+%           "Automatic Relevance Determination in Nonnegative Matrix
+%           Factorization with the beta-Divergence,", 2012
+%           Available at: https://vyftan.github.io/papers/supp_mat.pdf
 %
 % Author: Cassio F. Dantas
 % Date: 12 Nov 2020
@@ -137,7 +145,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
     x_old = x;
     
-    % Update x    
+    % Update x
+    % (see [1] eq. (32) and supplementary material [2] for more details)
     %Generic beta divergence (convex only for beta >= 1)
 %     Axbeta1 = (Ax+param.epsilon).^(beta-1);
 %     yAxbeta2 = (y+param.epsilon_y).*(Ax+param.epsilon).^(beta-2);
@@ -147,7 +156,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
     ATAxbeta1 = A.'*Axbeta1;
     ATyAxbeta2 = A.'*(yAxbeta2);
-    x = x.*(ATyAxbeta2) ./ (ATAxbeta1 + lambda);   
+    x = x.*( (ATyAxbeta2) ./ (ATAxbeta1 + lambda) ); %.^gamma (=1 for beta=1.5)
 
     % Update A*x for next iteration
     % (also used in Gap stopping criterion)
