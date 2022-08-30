@@ -38,8 +38,8 @@ exp_type = 'synthetic'; % Options: 'synthetic', or some real dataset
                          %     'Urban', 'Urban_subsampled'
                          %     'Cuprite', 'Cuprite_subsampled', 'Moffett', 'Madonna'
                          %     'Cuprite_USGS-lib', 'Urban_USGS-lib' (using USGS spectral library as dictionary)
+param.screen_period = 1; % Screening is performed every screen_period iterations of the solver (default is 1)
 param.normalizeA = true;
-param.ymult = 5; %~5: for y with lots of zero entries. Synthetic experiment only.
             
 if strcmp(noise_type,'gaussian_std')
     sigma = 0.1; %noise standard deviation
@@ -135,7 +135,12 @@ if CoD
         stop_crit_it_CoDscr_adap_all = cell(size(lambdas_rel));
         if strcmp(problem_type,'logistic'), stop_crit_it_CoDscr_global_all = cell(size(lambdas_rel)); end
     end
+    %Other - Screening
     alpha_redef_CoDscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_nb_iter_CoDscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_time_CoDscr = zeros(length(lambdas_rel),mc_it);
+    screen_time_CoDscr_adap = zeros(length(lambdas_rel),mc_it);
+    if strcmp(problem_type,'logistic'), screen_time_CoDscr_global = zeros(length(lambdas_rel),mc_it); end    
 end
 if MM
     l1_norm_MM = zeros(size(lambdas_rel)); %L1 norm
@@ -166,7 +171,11 @@ if MM
         stop_crit_it_MMscr_all = cell(size(lambdas_rel));
         stop_crit_it_MMscr_adap_all = cell(size(lambdas_rel));
     end
+    %Other - Screening
     alpha_redef_MMscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_nb_iter_MMscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_time_MMscr = zeros(length(lambdas_rel),mc_it);
+    screen_time_MMscr_adap = zeros(length(lambdas_rel),mc_it);
 end
 if PG   
     l1_norm_SPIRAL = zeros(size(lambdas_rel)); %L1 norm
@@ -188,7 +197,6 @@ if PG
     time_SPIRAL_various = zeros(5, length(lambdas_rel),mc_it);
     time_SPIRALscr_various = zeros(5, length(lambdas_rel),mc_it);  
     time_SPIRALscr_adap_various = zeros(5, length(lambdas_rel),mc_it);  
-    alpha_redef_SPIRALscr_adap = zeros(length(lambdas_rel),mc_it);
     if mc_it == 1 %time: per iteration
         time_it_SPIRAL_all = cell(size(lambdas_rel));
         time_it_SPIRALscr_all = cell(size(lambdas_rel));
@@ -202,6 +210,11 @@ if PG
     %Reconstruction error - TODO
     rec_err_euc_SPIRAL = zeros(size(lambdas_rel));
     rec_err_KL_SPIRAL = zeros(size(lambdas_rel));
+    %Other - Screening
+    alpha_redef_SPIRALscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_nb_iter_SPIRALscr_adap = zeros(length(lambdas_rel),mc_it);
+    screen_time_SPIRALscr = zeros(length(lambdas_rel),mc_it);
+    screen_time_SPIRALscr_adap = zeros(length(lambdas_rel),mc_it);    
 end
 
 input_error_euc = 0; input_error_KL = 0;
@@ -225,7 +238,8 @@ if strcmp(exp_type,'synthetic')
             A = abs(randn(n,m));
             A = A./repmat(sqrt(sum(A.^2)),n,1);% normalizing columns
         end
-        x_golden = param.ymult*sprand(m,1,sp_ratio);
+        param.ymult = 5; % a low value (~5) will lead y with lots of zero entries on a synthetic experiment with poisson noise.
+        x_golden = param.ymult*sprand(m,1,sp_ratio); %entries of x_golden are uniformly distributed on [0 ymult]
         y_orig = A*abs(full(x_golden)); %y = abs(randn(n,1));
         y_orig = y_orig/norm(y_orig);
     end    
@@ -247,7 +261,7 @@ end
 
 %Add noise
 if strcmp(noise_type,'poisson')
-    y = poissrnd(y_orig);
+    y = poissrnd(full(y_orig));
 elseif strcmp(noise_type,'gaussian_std') % gaussian with std
     y = y_orig + sigma*randn(size(y_orig));
 elseif strcmp(noise_type,'gaussian_snr') % gaussin with snr
@@ -324,13 +338,19 @@ for k_lambda = 1:length(lambdas)
 
     % Warm start
     if warm_start
-        x0_CoD = x_CoD;
-        x0_CoDscr = x_CoDscr;
-        x0_MM = x_MM;
-        x0_MMscr = x_MMscr;
-        x0_SPIRAL = x_SPIRAL;
-        x0_SPIRALscr = x_SPIRALscr;
-        %x0_FISTA = x_FISTA;
+        if CoD
+            x0_CoD = x_CoD;
+            x0_CoDscr = x_CoDscr;
+        end
+        if MM
+            x0_MM = x_MM;
+            x0_MMscr = x_MMscr;
+        end
+        if PG
+            x0_SPIRAL = x_SPIRAL;
+            x0_SPIRALscr = x_SPIRALscr;
+            %x0_FISTA = x_FISTA;
+        end
     end
     
     %% Storing results
@@ -373,6 +393,27 @@ for k_lambda = 1:length(lambdas)
             screen_ratio_it_SPIRAL(:,k_lambda) = screen_ratio_it_SPIRAL(:,k_lambda) + padarray(sum(screen_it_SPIRALscr).',size(screen_ratio_it_SPIRAL,1)-length(stop_crit_it_SPIRALscr),'replicate','post')/(m*mc_it); 
             screen_ratio_it_SPIRAL_adap(:,k_lambda) = screen_ratio_it_SPIRAL_adap(:,k_lambda) + padarray(sum(screen_it_SPIRALscr_adap).',size(screen_ratio_it_SPIRAL_adap,1)-length(stop_crit_it_SPIRALscr_adap),'replicate','post')/(m*mc_it); 
         end
+    end
+    
+    % Other screening results
+    if CoD
+        alpha_redef_CoDscr_adap(k_lambda,k_mc) = trace_CoDscr_adap.count_alpha;
+        screen_nb_iter_CoDscr_adap(k_lambda,k_mc) = sum(trace_CoDscr_adap.screen_nb_it) + sum(trace_CoDscr_adap.screen_nb_it==0);
+        screen_time_CoDscr(k_lambda,k_mc) = sum(trace_CoDscr.screen_time_it);
+        screen_time_CoDscr_adap(k_lambda,k_mc) = sum(trace_CoDscr_adap.screen_time_it);
+        if strcmp(problem_type,'logistic'), screen_time_CoDscr_global(k_lambda,k_mc) = sum(trace_CoDscr_global.screen_time_it); end
+    end
+    if MM
+        alpha_redef_MMscr_adap(k_lambda,k_mc) = trace_MMscr_adap.count_alpha;
+        screen_nb_iter_MMscr_adap(k_lambda,k_mc) = sum(trace_MMscr_adap.screen_nb_it) + sum(trace_MMscr_adap.screen_nb_it==0);
+        screen_time_MMscr(k_lambda,k_mc) = sum(trace_MMscr.screen_time_it);
+        screen_time_MMscr_adap(k_lambda,k_mc) = sum(trace_MMscr_adap.screen_time_it);     
+    end
+    if PG
+        alpha_redef_SPIRALscr_adap(k_lambda,k_mc) = trace_SPIRALscr_adap.count_alpha;
+        screen_nb_iter_SPIRALscr_adap(k_lambda,k_mc) = sum(trace_SPIRALscr_adap.screen_nb_it) + sum(trace_SPIRALscr_adap.screen_nb_it==0);
+        screen_time_SPIRALscr(k_lambda,k_mc) = sum(trace_SPIRALscr.screen_time_it);
+        screen_time_SPIRALscr_adap(k_lambda,k_mc) = sum(trace_SPIRALscr_adap.screen_time_it);        
     end
     
     % Nb Iterations
@@ -499,6 +540,7 @@ else %Light save
     clear obj_CoD obj_CoDscr obj_CoDscr_adap obj_CoD_global obj_MM obj_MMscr obj_MMscr_adap obj_SPIRAL obj_SPIRALscr obj_SPIRALscr_adap
     clear stop_crit_it_CoD stop_crit_it_CoDscr stop_crit_it_CoDscr_adap stop_crit_it_CoD_global stop_crit_it_MM stop_crit_it_MMscr stop_crit_it_MMscr_adap stop_crit_it_SPIRAL stop_crit_it_SPIRALscr stop_crit_it_SPIRALscr_adap
     clear time_it_CoD time_it_CoDscr time_it_CoDscr_adap time_it_CoD_global time_it_MM time_it_MMscr time_it_MMscr_adap time_it_SPIRAL time_it_SPIRALscr time_it_SPIRALscr_adap
+    clear trace_CoDscr trace_CoDscr_adap trace_CoDscr_global trace_MMscr trace_MMscr_adap trace_SPIRALscr  trace_SPIRALscr_adap 
     save(['./Results/new_main_' problem_type '_screening_test_mcIt' num2str(mc_it) '_' num2str(length(lambdas)) 'lambdas' num2str(lambdas_rel(1)) '-' num2str(lambdas_rel(end)) '_tol' num2str(param.TOL) '_eps' num2str(epsilon) '_n' num2str(n) 'm' num2str(m) '_sp' num2str(sp_ratio) '_wstart' num2str(warm_start) '_seed' num2str(rng_seed) '.mat'])
 end
 

@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it, stop_crit_it, time_it, count_alpha, step_it] = SPIRAL_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it, stop_crit_it, time_it, trace] = SPIRAL_GAPSafe(A, y, lambda, x0, param, precalc)
 % This function implements a particular case of the SPIRAL-TAP algorithm
 % proposed in [1] and available at:
 %
@@ -81,6 +81,7 @@ if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'epsilon'); param.epsilon = 1e-10; end %
 if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
 if ~isfield(param, 'euc_dist'); param.euc_dist = false; end
+if ~isfield(param, 'screen_period'); param.screen_period = 1; end
 
 if (param.epsilon==0) && any(y==0)
     warning('SPIRAL solver does not converge with epsilon=0 when there are zero entries in the input vector.')
@@ -132,7 +133,7 @@ sigma = 0.1;     % between 0 and 1
 M = 10; % Number of past iterations considered
 
 % ---- Storage variables ----
-count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
+trace.count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 obj = zeros(1, param.MAX_ITER);
 obj(1) = g.eval(x) + f.eval(Ax);
 if param.save_all
@@ -140,7 +141,7 @@ if param.save_all
     screen_it = false(m, param.MAX_ITER); % Safe region radius by iteration
     stop_crit_it = zeros(1, param.MAX_ITER);
     stop_crit_it(1) = inf;
-    step_it = zeros(1,param.MAX_ITER);
+    trace.step_it = zeros(1,param.MAX_ITER);
 
     %Save all iterates only if not too much memory-demanding (<4GB)
     if m*param.MAX_ITER*8 < 4e9
@@ -155,6 +156,8 @@ if param.save_all
 end
 if param.save_time
     time_it = zeros(1,param.MAX_ITER); % Elapsed time until end of each iteration
+    trace.screen_time_it = zeros(1,param.MAX_ITER); % Elapsed time on screening at each iteration
+    trace.screen_nb_it = zeros(1,param.MAX_ITER); %# of inner iterations in the screening refinement loop.
     time_it(1) = toc(tStart); % time for initializations 
 end
 
@@ -234,14 +237,16 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 
     % Redefine current alpha if necessary
     if precalc.improving && (norm(theta - theta_old) > radius)
-        count_alpha = count_alpha + 1;
+        trace.count_alpha = trace.count_alpha + 1;
         radius = norm(theta - theta_old);
         denominator_r = (1 + lambda*(theta_old + radius)).^2 ; denominator_r = denominator_r(y~=0);
         precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
     end
     
     % Screening
-    [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
+    if mod(k,param.screen_period) == 0, tic
+    [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
+    if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end %Only screening test time is counted
 
     % Remove screened coordinates (and corresponding atoms)
 %     A = A(:,~screen_vec);
@@ -254,6 +259,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     grad(screen_vec) = [];
     
     rejected_coords(~rejected_coords) = screen_vec;
+%     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end
+    end
     
     % Save intermediate results
     if param.save_all
@@ -268,7 +275,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         % Store stopping criterion
         stop_crit_it(k) = stop_crit;
         % Store step-sizes
-        step_it(k) = 1./alpha;
+        trace.step_it(k) = 1./alpha;
     end
     if param.save_time
         % Store iteration time
@@ -300,13 +307,15 @@ if param.save_all
     R_it = R_it(1:k);
     screen_it = screen_it(:,1:k);    
     stop_crit_it = stop_crit_it(1:k);
-    step_it = step_it(1:k);
+    trace.step_it = trace.step_it(1:k);
     if save_x_it, x_it = x_it(:,1:k); end
 else
-    x_it = []; obj = []; R_it = []; screen_it = []; stop_crit_it = []; step_it = [];
+    x_it = []; obj = []; R_it = []; screen_it = []; stop_crit_it = [];
 end
 if param.save_time
     time_it = time_it(1:k);
+    trace.screen_time_it = trace.screen_time_it(1:k);
+    trace.screen_nb_it = trace.screen_nb_it(1:k);
 else
     time_it = []; 
 end

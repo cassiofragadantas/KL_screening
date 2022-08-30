@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y)
+function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y)
 % LogReg_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % Logistic Regression problem.
 %
@@ -37,33 +37,57 @@ function [screen_vec, radius, precalc] = LogReg_GAP_Safe(precalc, lambda, ATthet
 % Date: 16 Nov 2020
 
 % Prevent errors
-if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
+if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
 
 radius = sqrt(2*gap/precalc.alpha);
 
-
 %Teste: feedback loop alpha_r <--> r
 improving = precalc.improving; k=0;  %true for adaptive local screening!
-while improving
-    tmp =  max(0, min(abs(lambda*theta - y + 1/2)) - lambda*radius);
-    alpha_r = 4*lambda^2/(1 - 4*tmp^2);
-
-    radius_new = sqrt(2*gap/alpha_r);
-    improvement = (radius - radius_new);
-    if improvement > 0
-       radius = radius - improvement;
-       precalc.alpha = alpha_r;
-       k = k+1;
+trace.nb_it_all = 0; %TO DELETE
+if improving == 2 % Analytic variant
+%     radius_an = radius; precalc.alpha_an = precalc.alpha; precalc.alpha_old = precalc.alpha; %to delete
+    t =  min(abs(lambda*theta - y + 1/2));
+    if gap < 2*t^2 % t - lambda*radius > 0
+        numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
+        if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
+        alpha_star = (numerator/(1 -4*t^2))^2;
+%     if t - lambda*sqrt(2*gap/alpha_star) > 0
+        precalc.alpha = alpha_star;
+        precalc.alpha = max(alpha_star,precalc.alpha);
+        radius = sqrt(2*gap/precalc.alpha);
     end
-    %stopping criterion
-    if improvement/radius < 1e-1, improving = false; end
+%     end
+else % Iterative variant %TODO uncomment
+    radius = sqrt(2*gap/precalc.alpha);
+    t =  min(abs(lambda*theta - y + 1/2));
+    while improving
+        tmp =  max(0, t - lambda*radius);
+        alpha_r = 4*lambda^2/(1 - 4*tmp^2);
+
+        radius_new = sqrt(2*gap/alpha_r);
+        improvement = (radius - radius_new);
+        if improvement > 0
+           radius = radius - improvement;
+           precalc.alpha = alpha_r;
+           k = k+1;
+        end
+        trace.nb_it_all = trace.nb_it_all + 1; %TO DELETE
+        %stopping criterion
+        if improvement/radius < 1e-1, improving = false; end %1e-1
+    end
+% TO DELETE
+% t - lambda*radius > 0
+% radius - radius_an
+% precalc.alpha - precalc.alpha_an
+% precalc.alpha - precalc.alpha_old
 end
 
 %% Screening test
 screen_vec = (abs(ATtheta) + radius*precalc.normA < 1); % min(radius)
 
 % if k == 0, fprintf('.'), else, fprintf('%d ',k); end
+trace.nb_it = k;
 end
 

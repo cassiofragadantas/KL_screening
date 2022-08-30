@@ -1,4 +1,4 @@
-function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it, count_alpha] = Beta_l1_MM_GAPSafe(A, y, lambda, x0, param, precalc)
+function [x, obj, x_it, R_it, screen_it,stop_crit_it, time_it, trace] = Beta_l1_MM_GAPSafe(A, y, lambda, x0, param, precalc)
 % Beta_l1_MM a Majoration-minimization approach to solve a non-negative 
 % l1-regularized problem that uses the Beta divergence (beta = 1.5) as the 
 % data-fidelity term :
@@ -89,6 +89,7 @@ if ~isfield(param, 'save_time'); param.save_time = true; end
 if ~isfield(param, 'stop_crit'); param.stop_crit = 'difference'; end
 if ~isfield(param, 'epsilon'); param.epsilon = 0; end
 if ~isfield(param, 'epsilon_y'); param.epsilon_y = 0; end
+if ~isfield(param, 'screen_period'); param.screen_period = 1; end
 % if ~isfield(param, 'beta'); param.beta = 1.5; end, beta = param.beta;
 
 % objective function
@@ -117,7 +118,7 @@ radius = inf; theta = 0;
 if (nargin < 6), precalc = beta_GAP_Safe_precalc(A,y+param.epsilon_y,lambda,param.epsilon); end % Initialize screening rule, if not given as an input
 
 
-count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
+trace.count_alpha = 0; %# times it was necessary to redefine alpha from previous iteration
 if param.save_all
     obj = zeros(1, param.MAX_ITER); % Objective function value by iteration
     obj(1) =  f.eval(Ax) + g.eval(x) ;
@@ -139,6 +140,8 @@ if param.save_all
 end
 if param.save_time
     time_it = zeros(1,param.MAX_ITER); % Elapsed time until end of each iteration
+    trace.screen_time_it = zeros(1,param.MAX_ITER); % Elapsed time on screening at each iteration
+    trace.screen_nb_it = zeros(1,param.MAX_ITER); %# of inner iterations in the screening refinement loop.
     time_it(1) = toc(tStart); % time for initializations 
 end
 
@@ -216,7 +219,7 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
     % Redefine current alpha if necessary
     if precalc.improving && (norm(theta - theta_old) > radius)
-        count_alpha = count_alpha + 1;
+        trace.count_alpha = trace.count_alpha + 1;
         radius = norm(theta - theta_old);
         d = lambda*(theta_old+radius);
         d = min(d, precalc.b);
@@ -227,7 +230,9 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     end
     
     % Screening
-    [screen_vec, radius, precalc] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y+param.epsilon_y);
+    if mod(k,param.screen_period) == 0, tic
+    [screen_vec, radius, precalc, trace_screen] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y+param.epsilon_y);
+    if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end %Only screening test time is counted
 
     % Remove screened coordinates (and corresponding atoms)
 %     A = A(:,~screen_vec);
@@ -238,6 +243,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     precalc.normA(screen_vec) = [];
     
     rejected_coords(~rejected_coords) = screen_vec;
+%     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end
+    end
     
     % Save intermediate results
     if param.save_all
@@ -279,6 +286,8 @@ else
 end
 if param.save_time
     time_it = time_it(1:k);
+    trace.screen_time_it = trace.screen_time_it(1:k);
+    trace.screen_nb_it = trace.screen_nb_it(1:k);
 else
     time_it = []; 
 end

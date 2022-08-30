@@ -40,7 +40,7 @@ if (nargin < 5) || isempty(precalc) % recompute everything
 
     % Norm of the columns of A
 %     precalc.normA = sqrt(sum(A.^2)).';
-    precalc.normA = sqrt(sum(A(~idx_y0,:).^2)).'; %improved screening! ignoring lines of A s.t. yi = 0
+    precalc.normA = sqrt(sum(A(~idx_y0,:).^2,1)).'; %improved screening! ignoring lines of A s.t. yi = 0
     
     % Sum of columns of A restricted to lines i where yi==0
     precalc.sumA_zero = sum(A(idx_y0,:)).'/lambda;

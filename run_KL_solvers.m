@@ -3,6 +3,7 @@
 % It requires all simulation parameters to stored on 'param' variable. 
 % Variables A, y, lambda and x0 also need to be set.
 
+if CoD
 %Coordinate Descent - Hsieh2011
 fprintf('CoD solver KL...\n')
 % profile on    
@@ -12,50 +13,57 @@ fprintf('CoD solver KL...\n')
 % profsave(profile('info'),'./Results/new_Profile_CoD')
 
 %CoD + Screening
-fprintf('CoD solver KL + Screening...\n')
-[x_CoDscr, obj_CoDscr, x_it_CoDscr, R_it_CoDscr, screen_it_CoDscr, stop_crit_it_CoDscr, time_it_CoDscr] ...
+% precalc.improving = false; fprintf('CoD solver KL + Screening...\n')
+precalc.improving = 2; fprintf('CoD solver KL + Screening w/ analytical refinement......\n')
+[x_CoDscr, obj_CoDscr, x_it_CoDscr, R_it_CoDscr, screen_it_CoDscr, stop_crit_it_CoDscr, time_it_CoDscr, trace_CoDscr] ...
     = CoD_KL_l1_GAPSafe(A,y,lambda,x0_CoDscr,param,precalc);
 
 precalc.improving = true;
 fprintf('CoD solver KL + Screening w/ refinement...\n')
-[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap, alpha_redef_CoDscr_adap(k_lambda,k_mc)] ...
+[x_CoDscr_adap, obj_CoDscr_adap, x_it_CoDscr_adap, R_it_CoDscr_adap, screen_it_CoDscr_adap, stop_crit_it_CoDscr_adap, time_it_CoDscr_adap, trace_CoDscr_adap] ...
     = CoD_KL_l1_GAPSafe(A,y,lambda,x0_CoDscr,param,precalc);
 precalc.improving = false;
-precalc.alpha = precalc.alpha_coord;
+end
 
+if MM
 %MM
 fprintf('MM solver KL...\n')
 [x_MM, obj_MM, x_it_MM, stop_crit_it_MM, time_it_MM] ...
     = KL_l1_MM(A,y,lambda,x0_MM,param);
 
 %MM + Screening
-fprintf('MM solver KL + Screening...\n')
-[x_MMscr, obj_MMscr, x_it_MMscr, R_it_MMscr, screen_it_MMscr, stop_crit_it_MMscr, time_it_MMscr] ...
+% precalc.improving = false; fprintf('MM solver KL + Screening...\n')
+precalc.improving = 2; fprintf('MM solver KL + Screening w/ analytical refinement......\n')
+[x_MMscr, obj_MMscr, x_it_MMscr, R_it_MMscr, screen_it_MMscr, stop_crit_it_MMscr, time_it_MMscr, trace_MMscr] ...
     = KL_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
 
 precalc.improving = true;
 fprintf('MM solver KL + Screening w/ refinement...\n')
-[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap, alpha_redef_MMscr_adap(k_lambda,k_mc)] ...
+[x_MMscr_adap, obj_MMscr_adap, x_it_MMscr_adap, R_it_MMscr_adap, screen_it_MMscr_adap, stop_crit_it_MMscr_adap, time_it_MMscr_adap, trace_MMscr_adap] ...
     = KL_l1_MM_GAPSafe(A,y,lambda,x0_MMscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha_coord;
+end
 
+if PG
 %SPIRAL
 fprintf('SPIRAL solver KL...\n')
 [x_SPIRAL, obj_SPIRAL, x_it_SPIRAL, stop_crit_it_SPIRAL, time_it_SPIRAL, step_it_SPIRAL] ...
     = SPIRAL(A, y, lambda, x0_SPIRAL, param);
 
 %SPIRAL + Screening
-fprintf('SPIRAL solver KL + Screening...\n')
-[x_SPIRALscr, obj_SPIRALscr, x_it_SPIRALscr, R_it_SPIRALscr, screen_it_SPIRALscr, stop_crit_it_SPIRALscr, time_it_SPIRALscr] ...
+% precalc.improving = false; fprintf('SPIRAL solver KL + Screening...\n')
+precalc.improving = 2; fprintf('SPIRAL solver KL + Screening w/ analytical refinement......\n')
+[x_SPIRALscr, obj_SPIRALscr, x_it_SPIRALscr, R_it_SPIRALscr, screen_it_SPIRALscr, stop_crit_it_SPIRALscr, time_it_SPIRALscr, trace_SPIRALscr] ...
     = SPIRAL_GAPSafe(A,y,lambda,x0_SPIRALscr,param,precalc);
 
 precalc.improving = true;
 fprintf('SPIRAL solver KL + Screening w/ refinement...\n')
-[x_SPIRALscr_adap, obj_SPIRALscr_adap, x_it_SPIRALscr_adap, R_it_SPIRALscr_adap, screen_it_SPIRALscr_adap, stop_crit_it_SPIRALscr_adap, time_it_SPIRALscr_adap, alpha_redef_SPIRALscr_adap(k_lambda,k_mc)] ...
+[x_SPIRALscr_adap, obj_SPIRALscr_adap, x_it_SPIRALscr_adap, R_it_SPIRALscr_adap, screen_it_SPIRALscr_adap, stop_crit_it_SPIRALscr_adap, time_it_SPIRALscr_adap, trace_SPIRALscr_adap] ...
     = SPIRAL_GAPSafe(A,y,lambda,x0_SPIRALscr,param,precalc);
 precalc.improving = false;
 precalc.alpha = precalc.alpha_coord;
+end
 
 %FISTA
 % fprintf('FISTA solver...\n')
@@ -81,19 +89,9 @@ precalc.alpha = precalc.alpha_coord;
 % %     assert(~isnan(stop_crit_it_FISTA(end)), 'FISTA diverged') %FISTA diverges sometimes
 
 % Empirical verification of screening safety
-if any(x_MM(screen_it_MMscr(:,end)) > 10*m*max(stop_crit_it_MM(end),eps)), warning('SCREENING FAILED!'); end
+if MM && any(x_MM(screen_it_MMscr(:,end)) > 10*m*max(stop_crit_it_MM(end),eps)), warning('SCREENING FAILED!'); end
 % if any(screen_it_MMscr(:,end)) % estimating factor (about 1.25*m in 100 runs)
 %     gap_factor(k_lambda) = max(gap_factor(k_lambda), max(x_MM(screen_it_MMscr(:,end))) / stop_crit_it_MM(end));
 % end
-if any(x_SPIRAL(screen_it_SPIRALscr(:,end)) > 10*m*max(stop_crit_it_SPIRAL(end),eps)), warning('SCREENING FAILED!'); end
+if PG && any(x_SPIRAL(screen_it_SPIRALscr(:,end)) > 10*m*max(stop_crit_it_SPIRAL(end),eps)), warning('SCREENING FAILED!'); end
 
-%dual
-theta = (1/lambda)  * (y-A*x_SPIRAL)./(A*x_SPIRAL + param.epsilon);
-if param.epsilon == 0
-    dual = (y(y~=0) + param.epsilon).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta(y~=0)); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
-else
-    dual = (y + param.epsilon).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-end    
-%TO EXPLORE!! %hist(theta./y) % close to constant
-%assert(all(A.'*theta >= -1),'ASSUMPTION THAT (At*theta >= -1) FAILED'); %IT FAILS at small lambda (e.g. lambda_rel = 1e-12)
-%assert(all(A(y~=0,:).'*theta(y~=0) >= -1),'ASSUMPTION THAT (At*theta >= -1) FAILED (even excluding y==0 coordinates)'); %IT FAILS at small lambda (e.g. lambda_rel = 1e-12)

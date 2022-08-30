@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
+function [screen_vec, radius, precalc, trace] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
 % KL_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % problem that uses Kullback-Leibler divergence as the data-fidelity term :
 % 
@@ -49,7 +49,7 @@ function [screen_vec, radius, precalc] = KL_GAP_Safe(precalc, lambda, ATtheta, g
 if (nargin < 7), epsilon_y = 0; end
 
 % Prevent errors
-if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
+if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
 %==== Other - wrong ====
@@ -66,27 +66,41 @@ if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; return; end
 % radius(1) = sqrt(2*gap/precalc.alpha_all); %Separated min (not optimal)
 radius = sqrt(2*gap/precalc.alpha);
 
-
 %Teste: feedback loop alpha_r <--> r
 improving = precalc.improving; k=0;  %true for adaptive local screening!
-while improving
-    denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
-%     denominator_r = min( denominator_r , precalc.denominator );
-    alpha_r = lambda^2 * min( (y(y~=0)+epsilon_y)./(denominator_r) );
-    radius_new = sqrt(2*gap/alpha_r);
-    improvement = (radius - radius_new);
-    if improvement > 0
-       radius = radius - improvement;
-       precalc.alpha = alpha_r;
-       k = k+1;
+if improving == 2 % Analytic variant
+%     radius_an = radius; precalc.alpha_an = precalc.alpha; precalc.alpha_old; %to delete
+    if gap < min(y(y~=0)./2)
+        denominator = (1 + lambda*(theta(y~=0))).^2 ;
+        alpha_star = lambda^2* min((sqrt(y(y~=0))-sqrt(2*gap)).^2./denominator);
+        precalc.alpha = max(alpha_star,precalc.alpha);
+        radius = sqrt(2*gap/precalc.alpha);
     end
-    %stopping criterion
-    if improvement/radius < 1e-1, improving = false; end
+else % Iterative variant
+    radius = sqrt(2*gap/precalc.alpha);
+    while improving
+        denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
+    %     denominator_r = min( denominator_r , precalc.denominator );
+        alpha_r = lambda^2 * min( (y(y~=0)+epsilon_y)./(denominator_r) );
+        radius_new = sqrt(2*gap/alpha_r);
+        improvement = (radius - radius_new);
+        if improvement > 0
+           radius = radius - improvement;
+           precalc.alpha = alpha_r;
+           k = k+1;
+        end    
+        %stopping criterion
+        if improvement/radius < 1e-1, improving = false; end %1e-1
+    end
+%TO DELETE
+% gap < min(y(y~=0)./(2*lambda))
+% radius - radius_an
+% precalc.alpha - precalc.alpha_an
 end
-
 %% Screening test
 screen_vec = (ATtheta + radius*precalc.normA < 1); % min(radius)
 
 % if k == 0, fprintf('.'), else, fprintf('%d ',k); end
+trace.nb_it = k;
 end
 
