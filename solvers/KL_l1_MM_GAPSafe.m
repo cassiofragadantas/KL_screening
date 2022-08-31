@@ -108,7 +108,7 @@ idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
 sumA = A.'*ones(n,1);
-radius = inf; theta = 0;
+radius = inf; theta = 0; radius_old = inf; theta_old = 0; gap_last_alpha = inf;
 
 if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
 
@@ -120,6 +120,8 @@ if param.save_all
     screen_it = false(m, param.MAX_ITER); % Safe region radius by iteration
     stop_crit_it = zeros(1, param.MAX_ITER);
     stop_crit_it(1) = inf;
+    trace.theta_dist = zeros(1,param.MAX_ITER); % variation on dual point
+    trace.gap_last_alpha = zeros(1,param.MAX_ITER);  % gap on last actual alpha improvement        
     
     %Save all iterates only if not too much memory-demanding (<4GB)
     if m*param.MAX_ITER*8 < 4e9
@@ -144,21 +146,8 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
    
     k = k + 1;
     if param.verbose, fprintf('%4d,',k); end
-    
-    x_old = x;
-    
-    % Update x
-%     x = x.*(A.'*((y+param.epsilon_y)./(Ax+param.epsilon))) ./ (sumA + lambda);
-    yAx = (y+param.epsilon_y)./(Ax+param.epsilon);
-    ATyAx = A.'*yAx;
-    x = x.*ATyAx./(sumA + lambda);
-
-    % Update A*x for next iteration
-    % (also used in Gap stopping criterion and in GAP Safe rule)
-    Ax = A*x; % avoid recalculating this
 
     % Update dual point
-    theta_old = theta;
     ATtheta = (1/lambda)*(ATyAx - sumA);
     scaling =  max(1,max(ATtheta));
     theta = (yAx - ones(n,1))/(scaling*lambda); %dual scaling (or: max(ATtheta))
@@ -187,18 +176,25 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
 
     % Redefine current alpha if necessary
-    if precalc.improving && (norm(theta - theta_old) > radius)
+    theta_dist = norm(theta - theta_old);     
+    if precalc.improving && (theta_dist > radius_old)
         trace.count_alpha = trace.count_alpha + 1;
-        radius = norm(theta - theta_old);
-        denominator_r = (1 + lambda*(theta_old + radius)).^2 ; denominator_r = denominator_r(y~=0);
+        radius_old = theta_dist;
+        denominator_r = (1 + lambda*(theta_old + radius_old)).^2 ; denominator_r = denominator_r(y~=0);
         precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
     end
     
     % Screening
-    if mod(k,param.screen_period) == 0, tic
+    if mod(k-2,param.screen_period) == 0, tic
     [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, param.epsilon_y);
     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end %Only screening test time is counted
 
+    if trace_screen.nb_it > 0 % current alpha was actually used
+        theta_old = theta;
+        radius_old = radius;
+        gap_last_alpha = gap;
+    end    
+    
     % Remove screened coordinates (and corresponding atoms)
 %     A = A(:,~screen_vec);
 %     x = x(~screen_vec);
@@ -211,7 +207,20 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     
     rejected_coords(~rejected_coords) = screen_vec;
 %     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end
-    end
+    end    
+    
+    x_old = x;
+    
+    % Update x
+%     x = x.*(A.'*((y+param.epsilon_y)./(Ax+param.epsilon))) ./ (sumA + lambda);
+    yAx = (y+param.epsilon_y)./(Ax+param.epsilon);
+    ATyAx = A.'*yAx;
+    x = x.*ATyAx./(sumA + lambda);
+
+    % Update A*x for next iteration
+    % (also used in Gap stopping criterion and in GAP Safe rule)
+    Ax = A*x; % avoid recalculating this
+
     
     % Save intermediate results
     if param.save_all
@@ -228,6 +237,10 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         if save_x_it, x_it(~screen_it(:,k), k) = x; end
         % Store stopping criterion
         stop_crit_it(k) = stop_crit;
+        % Store dual point variation
+        trace.theta_dist(k) = theta_dist;   
+        % Store gap corresponding to last alpha update
+        trace.gap_last_alpha(k) = gap_last_alpha;                 
     end
     if param.save_time
         % Store iteration time
@@ -250,6 +263,8 @@ if param.save_all
     R_it = R_it(1:k);
     screen_it = screen_it(:,1:k);
     stop_crit_it = stop_crit_it(1:k);
+    trace.theta_dist = trace.theta_dist(1:k);
+    trace.gap_last_alpha = trace.gap_last_alpha(1:k);    
     if save_x_it, x_it = x_it(:,1:k); end
 else
     x_it = []; obj = []; R_it = []; screen_it = []; stop_crit_it = [];

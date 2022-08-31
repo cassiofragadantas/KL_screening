@@ -110,7 +110,7 @@ rejected_coords = false(m,1);
 idx_y0 = (y==0);
 
 Ax = A*x; % For first iteration
-radius = inf; theta = 0;
+radius = inf; theta = 0; radius_old = inf; theta_old = 0; gap_last_alpha = inf;
 
 if (nargin < 6), precalc = KL_GAP_Safe_precalc(A,y,lambda,param.epsilon_y); end % Initialize screening rule, if not given as an input
 % A2 = A.^2; %used for greedy version of CoD. Uncomment this and l.151-160
@@ -123,6 +123,8 @@ if param.save_all
     screen_it = false(m, param.MAX_ITER); % Safe region radius by iteration
     stop_crit_it = zeros(1, param.MAX_ITER);
     stop_crit_it(1) = inf;
+    trace.theta_dist = zeros(1,param.MAX_ITER); % variation on dual point
+    trace.gap_last_alpha = zeros(1,param.MAX_ITER);  % gap on last actual alpha improvement    
     
     %Save all iterates only if not too much memory-demanding (<4GB)
     if m*param.MAX_ITER*8 < 4e9
@@ -147,6 +149,74 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
    
     k = k + 1;
     if param.verbose, fprintf('%4d,',k); end
+
+    % Update dual point
+    theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
+    ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
+    scaling = max(1,max(ATtheta));
+    theta = theta/scaling; %dual scaling (or: max(ATtheta))
+    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
+        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
+        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
+    end
+    if any(theta<-1/lambda-eps), warning('some theta_i < -1/lambda'); end
+    
+    % Stopping criterion
+    primal = f.eval(Ax) + g.eval(x) ;
+    if param.epsilon_y == 0
+        dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
+    else
+        dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
+    end
+    
+    gap = primal - dual; % gap has to be calculated anyway for GAP_Safe
+    
+    if strcmp(param.stop_crit, 'gap') % Duality Gap
+        stop_crit = gap;
+    else %primal variable difference
+        stop_crit = norm(x - x_old, 2);
+    end
+    if param.verbose, stop_crit, end
+    
+    % Redefine current alpha if necessary
+    theta_dist = norm(theta - theta_old); 
+    if precalc.improving && (theta_dist > radius_old)
+        trace.count_alpha = trace.count_alpha + 1;
+        radius_old = theta_dist;
+        denominator_r = (1 + lambda*(theta_old + radius_old)).^2 ; denominator_r = denominator_r(y~=0);
+        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
+    end
+    
+    % Screening
+    if mod(k-2,param.screen_period) == 0, tic
+    [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
+    if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end  %Only screening test time is counted
+
+    if trace_screen.nb_it > 0 % current alpha was actually used
+        theta_old = theta;
+        radius_old = radius;
+        gap_last_alpha = gap;
+    end
+    
+    %Test! coordinate-wise limit for dual function 
+%     theta_max = max(precalc.A_1/lambda,1)*pinvAi_1.';
+%     dual_imax = (y + param.epsilon).*log(1+lambda*theta_max) - (lambda*param.epsilon*theta_max);
+    
+
+    % Remove screened coordinates (and corresponding atoms)
+    if(any(x(screen_vec)~=0)), Ax = Ax - A(:,screen_vec)*x(screen_vec);end %Update Ax when nonzero entries in x are screened.
+%     A = A(:,~screen_vec);
+%     x = x(~screen_vec);
+%     precalc.normA = precalc.normA(~screen_vec);
+    A(:,screen_vec) = []; 
+    x(screen_vec) = []; 
+    precalc.normA(screen_vec) = [];
+    precalc.sumA_zero(screen_vec) = [];
+%     A2(:,screen_vec) = []; %uncomment this for greedy variant of CoD
+
+    rejected_coords(~rejected_coords) = screen_vec;
+%     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end  
+    end    
     
     x_old = x + 0; % +0 avoids x_old to be modified within the MEX function
     
@@ -180,67 +250,6 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
 %         Ax = Ax + (x(idx)-x_old(idx))*A(:,idx);
 %     end
 
-    % Update dual point
-    theta_old = theta;
-    theta = (y - Ax + param.epsilon_y - param.epsilon)./(lambda*(Ax+param.epsilon)); % Feasible dual point calculation
-    ATtheta = A.'*theta; % /!\HEAVY CALCULATION. Also used for screening
-    scaling = max(1,max(ATtheta));
-    theta = theta/scaling; %dual scaling (or: max(ATtheta))
-    if scaling ~= 1  % if scaling = 1, no post-processing is necessary
-        theta(idx_y0) = -1/lambda; %forcing entries on yi=0 to optimal value
-        ATtheta = ATtheta/scaling - precalc.sumA_zero*(scaling-1)/scaling; %correcting ATtheta accordingly
-    end
-    if any(theta<-1/lambda-eps), warning('some theta_i < -1/lambda'); end
-    
-    % Stopping criterion
-    primal = f.eval(Ax) + g.eval(x) ;
-    if param.epsilon_y == 0
-        dual = y(y~=0).'*log(1+lambda*theta(y~=0)) - sum(lambda*param.epsilon*theta); % since 0*log(a) = 0 for all a>=0. Avoids 0*log(0) = NaN
-    else
-        dual = (y + param.epsilon_y).'*log(1+lambda*theta) - sum(lambda*param.epsilon*theta);
-    end
-    
-    gap = primal - dual; % gap has to be calculated anyway for GAP_Safe
-    
-    if strcmp(param.stop_crit, 'gap') % Duality Gap
-        stop_crit = gap;
-    else %primal variable difference
-        stop_crit = norm(x - x_old, 2);
-    end
-    if param.verbose, stop_crit, end
-    
-    % Redefine current alpha if necessary
-    if precalc.improving && (norm(theta - theta_old) > radius)
-        trace.count_alpha = trace.count_alpha + 1;
-        radius = norm(theta - theta_old);
-        denominator_r = (1 + lambda*(theta_old + radius)).^2 ; denominator_r = denominator_r(y~=0);
-        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
-    end
-    
-    % Screening
-    if mod(k,param.screen_period) == 0, tic
-    [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
-    if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end  %Only screening test time is counted
-    
-    %Test! coordinate-wise limit for dual function 
-%     theta_max = max(precalc.A_1/lambda,1)*pinvAi_1.';
-%     dual_imax = (y + param.epsilon).*log(1+lambda*theta_max) - (lambda*param.epsilon*theta_max);
-    
-
-    % Remove screened coordinates (and corresponding atoms)
-    if(any(x(screen_vec)~=0)), Ax = Ax - A(:,screen_vec)*x(screen_vec);end %Update Ax when nonzero entries in x are screened.
-%     A = A(:,~screen_vec);
-%     x = x(~screen_vec);
-%     precalc.normA = precalc.normA(~screen_vec);
-    A(:,screen_vec) = []; 
-    x(screen_vec) = []; 
-    precalc.normA(screen_vec) = [];
-    precalc.sumA_zero(screen_vec) = [];
-%     A2(:,screen_vec) = []; %uncomment this for greedy variant of CoD
-
-    rejected_coords(~rejected_coords) = screen_vec;
-%     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end  
-    end
     
     % Save intermediate results
     if param.save_all
@@ -257,6 +266,10 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         if save_x_it, x_it(~screen_it(:,k), k) = x; end
         % Store stopping criterion
         stop_crit_it(k) = stop_crit;
+        % Store dual point variation
+        trace.theta_dist(k) = theta_dist;        
+        % Store gap corresponding to last alpha update
+        trace.gap_last_alpha(k) = gap_last_alpha;        
     end
     if param.save_time
         % Store iteration time
@@ -279,6 +292,8 @@ if param.save_all
     R_it = R_it(1:k);
     screen_it = screen_it(:,1:k);
     stop_crit_it = stop_crit_it(1:k);
+    trace.theta_dist = trace.theta_dist(1:k);
+    trace.gap_last_alpha = trace.gap_last_alpha(1:k);
     if save_x_it, x_it = x_it(:,1:k); end
 else
     x_it = []; obj = []; R_it = []; screen_it = []; stop_crit_it = [];

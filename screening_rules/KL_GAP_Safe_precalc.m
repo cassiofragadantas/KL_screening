@@ -47,6 +47,8 @@ if (nargin < 5) || isempty(precalc) % recompute everything
 
 end
 
+precalc.min_y = min(y(~idx_y0)+epsilon_y);
+precalc.sqrt_y = sqrt(y(~idx_y0)+epsilon_y);
 
 % alpha (strong concavity constant)
 % precalc.denominator = (1 + max(precalc.A_1,lambda)*precalc.pinvAi_1(~idx_y0).').^2; %old alpha (worse than the one below)

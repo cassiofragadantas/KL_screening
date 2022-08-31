@@ -42,13 +42,13 @@ if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; ret
 %% Safe sphere definition
 
 radius = sqrt(2*gap/precalc.alpha);
+t =  min(abs(lambda*theta - y + 1/2));
 
 %Teste: feedback loop alpha_r <--> r
 improving = precalc.improving; k=0;  %true for adaptive local screening!
 trace.nb_it_all = 0; %TO DELETE
 if improving == 2 % Analytic variant
 %     radius_an = radius; precalc.alpha_an = precalc.alpha; precalc.alpha_old = precalc.alpha; %to delete
-    t =  min(abs(lambda*theta - y + 1/2));
     if gap < 2*t^2 % t - lambda*radius > 0
         numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
         if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
@@ -60,8 +60,7 @@ if improving == 2 % Analytic variant
     end
 %     end
 else % Iterative variant %TODO uncomment
-    radius = sqrt(2*gap/precalc.alpha);
-    t =  min(abs(lambda*theta - y + 1/2));
+
     while improving
         tmp =  max(0, t - lambda*radius);
         alpha_r = 4*lambda^2/(1 - 4*tmp^2);
@@ -75,7 +74,7 @@ else % Iterative variant %TODO uncomment
         end
         trace.nb_it_all = trace.nb_it_all + 1; %TO DELETE
         %stopping criterion
-        if improvement/radius < 1e-1, improving = false; end %1e-1
+        if improvement/radius < 1e-3, improving = false; end %1e-1
     end
 % TO DELETE
 % t - lambda*radius > 0
