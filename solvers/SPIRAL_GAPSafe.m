@@ -198,24 +198,12 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     end
     if param.verbose, stop_crit, end
 
-    % Redefine current alpha if necessary
-    theta_dist = norm(theta - theta_old); 
+    % Project theta into previous safe sphere
+    theta_dist = norm(theta - theta_old);
     if precalc.improving && (theta_dist > radius_old)
-        trace.count_alpha = trace.count_alpha + 1;
-        radius_old = theta_dist;
-        denominator_r = (1 + lambda*(theta_old + radius_old)).^2 ; denominator_r = denominator_r(y~=0);
-        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
-    end
-    % Redefine alpha systematically on previous sphere, if not already done
-    % If using this, comment alpha redefinition above
-    % This also ensures safety, but loses monotonicity in alpha.
-%     theta_dist = norm(theta - theta_old); 
-%     if precalc.improving && radius_old < inf && trace_screen.nb_it == 0 %init_improved %radius_old < inf
-%         trace.count_alpha = trace.count_alpha + 1;
-%         radius_old = max(theta_dist, radius_old);
-%         denominator_r = (1 + lambda*(theta_old + radius_old)).^2 ; denominator_r = denominator_r(y~=0);
-%         precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );        
-%     end
+        theta = theta_old + radius_old*(theta-theta_old)/theta_dist;
+        trace.count_alpha = trace.count_alpha + 1; % counter
+    end    
     
     % Screening
     if mod(k-2,param.screen_period) == 0, tic

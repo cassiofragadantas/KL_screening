@@ -40,27 +40,32 @@ function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda,
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
+t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
+improving = precalc.improving; k=0;  % 1 = iterative local screening, 2 = analytic
 
-radius = sqrt(2*gap/precalc.alpha);
-t =  min(abs(lambda*theta - y + 1/2));
-
-%Teste: feedback loop alpha_r <--> r
-improving = precalc.improving; k=0;  %true for adaptive local screening!
-trace.nb_it_all = 0; %TO DELETE
 if improving == 2 % Analytic variant
-%     radius_an = radius; precalc.alpha_an = precalc.alpha; precalc.alpha_old = precalc.alpha; %to delete
+    % Compute fixed-point
     if gap < 2*t^2 % t - lambda*radius > 0
-        numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
-        if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
-        alpha_star = (numerator/(1 -4*t^2))^2;
-%     if t - lambda*sqrt(2*gap/alpha_star) > 0
-        precalc.alpha = alpha_star;
-        precalc.alpha = max(alpha_star,precalc.alpha);
-        radius = sqrt(2*gap/precalc.alpha);
+        if t == 1/2
+            alpha_star = lambda^2*(2*gap+1)^2/(2*gap);
+        else
+            numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
+            if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
+            alpha_star = (numerator/(1 -4*t^2))^2;
+        end
+    else
+        alpha_star = 4*lambda^2;
     end
-%     end
-else % Iterative variant %TODO uncomment
+    trace.alpha_star = alpha_star; % storing fixed-point
 
+    % max
+    if alpha_star > precalc.alpha
+        precalc.alpha = alpha_star;
+        k = 1; % indicates that the fixed-point has been used
+    end    
+
+else % Iterative variant (refinement loop for alpha_r <--> r)
+    radius = sqrt(2*gap/precalc.alpha);
     while improving
         tmp =  max(0, t - lambda*radius);
         alpha_r = 4*lambda^2/(1 - 4*tmp^2);
@@ -72,16 +77,12 @@ else % Iterative variant %TODO uncomment
            precalc.alpha = alpha_r;
            k = k+1;
         end
-        trace.nb_it_all = trace.nb_it_all + 1; %TO DELETE
         %stopping criterion
         if improvement/radius < 1e-3, improving = false; end %1e-1
     end
-% TO DELETE
-% t - lambda*radius > 0
-% radius - radius_an
-% precalc.alpha - precalc.alpha_an
-% precalc.alpha - precalc.alpha_old
 end
+
+radius = sqrt(2*gap/precalc.alpha);
 
 %% Screening test
 screen_vec = (abs(ATtheta) + radius*precalc.normA < 1); % min(radius)

@@ -52,31 +52,24 @@ if (nargin < 7), epsilon_y = 0; end
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
-%==== Other - wrong ====
-%radius(1) = sqrt(2*gap)*(1+lambda*precalc.pinvA_1)/(lambda*sqrt(precalc.sumy)); %Wrong! But seems to work!
-%radius(1) = gap*(1+lambda*precalc.pinvA_1)/(lambda*precalc.miny); %Wrong! dual "inverse-Lipschitz"
-%radius(1) = sqrt(2*gap*(precalc.maxy*precalc.A_inf*precalc.A_1))/(lambda*epsilon); %0) primal Lispchitz gradient (direct extension of GAP journal paper)
-
-%==== Hessian based ====
-%Wrong! Does not consider negative theta entries
-% radius(1) = sqrt(2*gap/precalc.alpha_all_old);
-% radius(2) = sqrt(2*gap/precalc.alpha_coord_old);
-
-%Correct! Try to go back to the old ones, as experimentally they seem safe
-% radius(1) = sqrt(2*gap/precalc.alpha_all); %Separated min (not optimal)
-radius = sqrt(2*gap/precalc.alpha);
-
-%Teste: feedback loop alpha_r <--> r
-improving = precalc.improving; k=0;  %true for adaptive local screening!
+k=0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
 if improving == 2 % Analytic variant
-%     radius_an = radius; precalc.alpha_an = precalc.alpha; precalc.alpha_old; %to delete
+    % Compute fixed-point
     if gap < min(y(y~=0)./2)
         denominator = (1 + lambda*(theta(y~=0))).^2 ;
         alpha_star = lambda^2* min((sqrt(y(y~=0))-sqrt(2*gap)).^2./denominator);
-        precalc.alpha = max(alpha_star,precalc.alpha);
-        radius = sqrt(2*gap/precalc.alpha);
+    else
+        alpha_star = 0;
     end
-else % Iterative variant
+    trace.alpha_star = alpha_star; % storing fixed-point
+
+    % max
+    if alpha_star > precalc.alpha
+        precalc.alpha = alpha_star;
+        k = 1; % indicates that the fixed-point has been used
+    end
+
+else % Iterative variant (refinement loop for alpha_r <--> r)
     radius = sqrt(2*gap/precalc.alpha);
     while improving
         denominator_r = (1 + lambda*(theta + radius)).^2 ; denominator_r = denominator_r(y~=0);
@@ -92,11 +85,10 @@ else % Iterative variant
         %stopping criterion
         if improvement/radius < 1e-1, improving = false; end %1e-1
     end
-%TO DELETE
-% gap < min(y(y~=0)./(2*lambda))
-% radius - radius_an
-% precalc.alpha - precalc.alpha_an
 end
+
+radius = sqrt(2*gap/precalc.alpha);
+
 %% Screening test
 screen_vec = (ATtheta + radius*precalc.normA < 1); % min(radius)
 

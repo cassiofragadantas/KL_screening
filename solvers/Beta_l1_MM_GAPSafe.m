@@ -190,19 +190,13 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     if param.verbose, stop_crit, end
     
     
-    % Redefine current alpha if necessary
-    theta_dist = norm(theta - theta_old); 
+    % Project theta into previous safe sphere
+    theta_dist = norm(theta - theta_old);
     if precalc.improving && (theta_dist > radius_old)
-        trace.count_alpha = trace.count_alpha + 1;
-        radius_old = theta_dist;
-        d = lambda*(theta_old+radius_old);
-        d = min(d, precalc.b);
-        alphai = lambda^2*( (d.^2 + 2*y)./sqrt(d.^2 + 4*y) - d );
-        % In theory, alphai is always positive, but there can be numerical instabilites (see detailed comment in Beta_GAP_Safe_precalc.m)
-        if any(alphai<=0), alphai = lambda^2*(2*y.^2./(d.^3+4*y.*d)); end
-        precalc.alpha = min(alphai);
+        theta = theta_old + radius_old*(theta-theta_old)/theta_dist;
+        trace.count_alpha = trace.count_alpha + 1; % counter
     end
-    
+
     % Screening
     if mod(k-2,param.screen_period) == 0, tic
     [screen_vec, radius, precalc, trace_screen] = Beta_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y+param.epsilon_y);

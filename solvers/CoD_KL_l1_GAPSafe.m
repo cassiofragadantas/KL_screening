@@ -178,14 +178,12 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
     end
     if param.verbose, stop_crit, end
     
-    % Redefine current alpha if necessary
+    % Project theta into previous safe sphere
     theta_dist = norm(theta - theta_old); 
     if precalc.improving && (theta_dist > radius_old)
-        trace.count_alpha = trace.count_alpha + 1;
-        radius_old = theta_dist;
-        denominator_r = (1 + lambda*(theta_old + radius_old)).^2 ; denominator_r = denominator_r(y~=0);
-        precalc.alpha = lambda^2 * min( (y(y~=0)+param.epsilon_y)./(denominator_r) );
-    end
+        theta = theta_old + radius_old*(theta-theta_old)/theta_dist;
+        trace.count_alpha = trace.count_alpha + 1; % counter
+    end    
     
     % Screening
     if mod(k-2,param.screen_period) == 0, tic
