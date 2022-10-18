@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc, trace] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y)
+function [screen_vec, radius, precalc, trace] = KL_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, epsilon_y, improv_flag)
 % KL_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % problem that uses Kullback-Leibler divergence as the data-fidelity term :
 % 
@@ -47,13 +47,14 @@ function [screen_vec, radius, precalc, trace] = KL_GAP_Safe(precalc, lambda, ATt
 % Date: 30 Mar 2020
 
 if (nargin < 7), epsilon_y = 0; end
+if (nargin < 8), improv_flag = true; end
 
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
 k=0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
-if improving == 2 % Analytic variant
+if improving == 2 && improv_flag % Analytic variant
     % Compute fixed-point
     if gap < min(y(y~=0)./2)
         denominator = (1 + lambda*(theta(y~=0))).^2 ;

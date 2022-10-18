@@ -1,4 +1,4 @@
-function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y)
+function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda, ATtheta, gap, theta, y, improv_flag)
 % LogReg_GAP_Safe implements a GAP Safe Screening rule for the l1-regularized 
 % Logistic Regression problem.
 %
@@ -36,6 +36,8 @@ function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda,
 % Author: Cassio F. Dantas
 % Date: 16 Nov 2020
 
+if (nargin < 8), improv_flag = true; end
+
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
@@ -43,7 +45,7 @@ if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; ret
 t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
 improving = precalc.improving; k=0;  % 1 = iterative local screening, 2 = analytic
 
-if improving == 2 % Analytic variant
+if improving == 2 && improv_flag % Analytic variant
     % Compute fixed-point
     if gap < 2*t^2 % t - lambda*radius > 0
         if t == 1/2

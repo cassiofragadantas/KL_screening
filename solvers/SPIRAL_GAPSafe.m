@@ -204,10 +204,11 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         theta = theta_old + radius_old*(theta-theta_old)/theta_dist;
         trace.count_alpha = trace.count_alpha + 1; % counter
     end    
+    improv_flag = ( theta_dist > radius_old*(sqrt(gap/gap_last_alpha)-1) ); % tests if improvement in alpha is possible
     
     % Screening
     if mod(k-2,param.screen_period) == 0, tic
-    [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y);
+    [screen_vec, radius, precalc, trace_screen] = KL_GAP_Safe(precalc, lambda, ATtheta, gap,theta, y, param.epsilon_y, improv_flag);
     if param.save_time, trace.screen_time_it(k) = toc; trace.screen_nb_it(k) = trace_screen.nb_it; end %Only screening test time is counted
 
     if trace_screen.nb_it > 0 % current alpha was actually used
