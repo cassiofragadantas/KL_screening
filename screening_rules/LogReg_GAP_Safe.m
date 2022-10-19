@@ -45,9 +45,9 @@ if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; ret
 t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
 improving = precalc.improving; k=0;  % 1 = iterative local screening, 2 = analytic
 
-if improving == 2 && improv_flag % Analytic variant
+if improving == 2 % Analytic variant
     % Compute fixed-point
-    if gap < 2*t^2 % t - lambda*radius > 0
+    if gap < 2*t^2 && improv_flag
         if t == 1/2
             alpha_star = lambda^2*(2*gap+1)^2/(2*gap);
         else

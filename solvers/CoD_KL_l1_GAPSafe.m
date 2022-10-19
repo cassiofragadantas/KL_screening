@@ -125,6 +125,7 @@ if param.save_all
     stop_crit_it(1) = inf;
     trace.theta_dist = zeros(1,param.MAX_ITER); % variation on dual point
     trace.gap_last_alpha = zeros(1,param.MAX_ITER);  % gap on last actual alpha improvement    
+    trace.alpha_star = zeros(1,param.MAX_ITER);  % fixed-point solution
     
     %Save all iterates only if not too much memory-demanding (<4GB)
     if m*param.MAX_ITER*8 < 4e9
@@ -268,7 +269,9 @@ while (stop_crit > param.TOL) && (k < param.MAX_ITER)
         % Store dual point variation
         trace.theta_dist(k) = theta_dist;        
         % Store gap corresponding to last alpha update
-        trace.gap_last_alpha(k) = gap_last_alpha;        
+        trace.gap_last_alpha(k) = gap_last_alpha;
+        % Store fixed-point solution
+        if precalc.improving==2, trace.alpha_star(k) = trace_screen.alpha_star; end
     end
     if param.save_time
         % Store iteration time
@@ -293,6 +296,7 @@ if param.save_all
     stop_crit_it = stop_crit_it(1:k);
     trace.theta_dist = trace.theta_dist(1:k);
     trace.gap_last_alpha = trace.gap_last_alpha(1:k);
+    trace.alpha_star = trace.alpha_star(1:k);
     if save_x_it, x_it = x_it(:,1:k); end
 else
     x_it = []; obj = []; R_it = []; screen_it = []; stop_crit_it = [];

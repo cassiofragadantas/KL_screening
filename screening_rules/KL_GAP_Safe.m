@@ -54,9 +54,9 @@ if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; ret
 
 %% Safe sphere definition
 k=0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
-if improving == 2 && improv_flag % Analytic variant
+if improving == 2 % Analytic variant
     % Compute fixed-point
-    if gap < min(y(y~=0)./2)
+    if gap < min(y(y~=0)./2) && improv_flag
         denominator = (1 + lambda*(theta(y~=0))).^2 ;
         alpha_star = lambda^2* min((sqrt(y(y~=0))-sqrt(2*gap)).^2./denominator);
     else
