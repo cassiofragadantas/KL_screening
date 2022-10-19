@@ -39,13 +39,14 @@ function [screen_vec, radius, precalc, trace] = LogReg_GAP_Safe(precalc, lambda,
 if (nargin < 8), improv_flag = true; end
 
 % Prevent errors
-if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
+if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; trace.alpha_star = 0; return; end
 
 %% Safe sphere definition
 improving = precalc.improving; k=0;  % 1 = iterative local screening, 2 = analytic
 
 if improving == 2 % Analytic variant
     % Compute fixed-point
+    alpha_star = 4*lambda^2;
     if improv_flag
         t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
         if gap < 2*t^2
@@ -57,8 +58,6 @@ if improving == 2 % Analytic variant
                 alpha_star = (numerator/(1 -4*t^2))^2;
             end
         end
-    else
-        alpha_star = 4*lambda^2;
     end
     trace.alpha_star = alpha_star; % storing fixed-point
 

@@ -50,7 +50,7 @@ if (nargin < 7), epsilon_y = 0; end
 if (nargin < 8), improv_flag = true; end
 
 % Prevent errors
-if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
+if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; trace.alpha_star = 0; return; end
 
 %% Safe sphere definition
 k=0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
@@ -84,7 +84,7 @@ else % Iterative variant (refinement loop for alpha_r <--> r)
            k = k+1;
         end    
         %stopping criterion
-        if improvement/radius < 1e-1, improving = false; end %1e-1
+        if improvement/radius < 1e-3, improving = false; end %1e-1
     end
 end
 
