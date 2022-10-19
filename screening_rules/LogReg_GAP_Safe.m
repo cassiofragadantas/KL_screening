@@ -42,18 +42,20 @@ if (nargin < 8), improv_flag = true; end
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; return; end
 
 %% Safe sphere definition
-t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
 improving = precalc.improving; k=0;  % 1 = iterative local screening, 2 = analytic
 
 if improving == 2 % Analytic variant
     % Compute fixed-point
-    if gap < 2*t^2 && improv_flag
-        if t == 1/2
-            alpha_star = lambda^2*(2*gap+1)^2/(2*gap);
-        else
-            numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
-            if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
-            alpha_star = (numerator/(1 -4*t^2))^2;
+    if improv_flag
+        t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
+        if gap < 2*t^2
+            if t == 1/2
+                alpha_star = lambda^2*(2*gap+1)^2/(2*gap);
+            else
+                numerator = -4*t*lambda*sqrt(2*gap) + 2*lambda*sqrt(2*gap + 1 -4*t^2); %apparently numerator is always positive
+                if numerator < 0, error('WEIRD, numerator<0. This should not happen, theoretically.'), end
+                alpha_star = (numerator/(1 -4*t^2))^2;
+            end
         end
     else
         alpha_star = 4*lambda^2;
@@ -67,6 +69,7 @@ if improving == 2 % Analytic variant
     end    
 
 else % Iterative variant (refinement loop for alpha_r <--> r)
+    t =  min(abs(lambda*theta - y + 1/2)); % can be calculated beforehand
     radius = sqrt(2*gap/precalc.alpha);
     while improving
         tmp =  max(0, t - lambda*radius);
