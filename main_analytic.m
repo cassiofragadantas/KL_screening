@@ -156,12 +156,15 @@ if CoD
     if strcmp(problem_type,'logistic'), screen_time_CoDscr_global = zeros(length(lambdas_rel),mc_it); end    
     if mc_it == 1 
         screen_nb_iter_perIt_CoDscr_adap = cell(size(lambdas_rel));
+        alpha_star_CoDscr = cell(size(lambdas_rel));
         screen_max_CoDscr = cell(size(lambdas_rel));
         screen_max_CoDscr_adap = cell(size(lambdas_rel));
         gap_last_alpha_CoDscr = cell(size(lambdas_rel));
         gap_last_alpha_CoDscr_adap = cell(size(lambdas_rel));
         theta_dist_CoDscr = cell(size(lambdas_rel));
         theta_dist_CoDscr_adap = cell(size(lambdas_rel));
+        screen_time_perIt_CoDscr =  cell(size(lambdas_rel));
+        screen_time_perIt_CoDscr_adap =  cell(size(lambdas_rel));
     end        
 end
 if MM
@@ -210,12 +213,15 @@ if MM
     screen_time_MMscr_adap_various = zeros(5,length(lambdas_rel),mc_it);            
     if mc_it == 1
         screen_nb_iter_perIt_MMscr_adap = cell(size(lambdas_rel));
+        alpha_star_MMscr = cell(size(lambdas_rel));
         screen_max_MMscr = cell(size(lambdas_rel));
         screen_max_MMscr_adap = cell(size(lambdas_rel));
         gap_last_alpha_MMscr = cell(size(lambdas_rel));
         gap_last_alpha_MMscr_adap = cell(size(lambdas_rel));
         theta_dist_MMscr = cell(size(lambdas_rel));
         theta_dist_MMscr_adap = cell(size(lambdas_rel));        
+        screen_time_perIt_MMscr =  cell(size(lambdas_rel));
+        screen_time_perIt_MMscr_adap =  cell(size(lambdas_rel));
     end    
 end
 if PG   
@@ -268,12 +274,15 @@ if PG
     screen_time_SPIRALscr_adap_various = zeros(5,length(lambdas_rel),mc_it);        
     if mc_it == 1 
         screen_nb_iter_perIt_SPIRALscr_adap = cell(size(lambdas_rel)); 
+        alpha_star_SPIRALscr = cell(size(lambdas_rel));
         screen_max_SPIRALscr = cell(size(lambdas_rel)); 
         screen_max_SPIRALscr_adap = cell(size(lambdas_rel)); 
         gap_last_alpha_SPIRALscr = cell(size(lambdas_rel)); 
         gap_last_alpha_SPIRALscr_adap = cell(size(lambdas_rel)); 
         theta_dist_SPIRALscr = cell(size(lambdas_rel));
         theta_dist_SPIRALscr_adap = cell(size(lambdas_rel));        
+        screen_time_perIt_SPIRALscr =  cell(size(lambdas_rel));
+        screen_time_perIt_SPIRALscr_adap =  cell(size(lambdas_rel));
     end    
 end
 
@@ -464,12 +473,15 @@ for k_lambda = 1:length(lambdas)
         if strcmp(problem_type,'logistic'), screen_time_CoDscr_global(k_lambda,k_mc) = sum(trace_CoDscr_global.screen_time_it); end
         if mc_it == 1
             screen_nb_iter_perIt_CoDscr_adap{k_lambda} = max(trace_CoDscr_adap.screen_nb_it(2:param.screen_period:end),1);
+            alpha_star_CoDscr{k_lambda} = trace_CoDscr.alpha_star(2:param.screen_period:end);
             screen_max_CoDscr{k_lambda} = (trace_CoDscr.screen_nb_it(2:param.screen_period:end) == 0);
             screen_max_CoDscr_adap{k_lambda} = (trace_CoDscr_adap.screen_nb_it(2:param.screen_period:end) == 0);
             gap_last_alpha_CoDscr{k_lambda} = trace_CoDscr.gap_last_alpha(2:param.screen_period:end);
             gap_last_alpha_CoDscr_adap{k_lambda} = trace_CoDscr_adap.gap_last_alpha(2:param.screen_period:end);
             theta_dist_CoDscr{k_lambda} = trace_CoDscr.theta_dist; 
             theta_dist_CoDscr_adap{k_lambda} = trace_CoDscr_adap.theta_dist;
+            screen_time_perIt_CoDscr{k_lambda} = trace_CoDscr.screen_time_it(2:param.screen_period:end);
+            screen_time_perIt_CoDscr_adap{k_lambda} = trace_CoDscr_adap.screen_time_it(2:param.screen_period:end);
         end
         for kk=1:5
             nb_iter_CoD_various(kk,k_lambda,k_mc) = min([inf find(stop_crit_it_CoD<10^(5-kk)*param.TOL,1)]);
@@ -495,12 +507,15 @@ for k_lambda = 1:length(lambdas)
         screen_time_MMscr_adap(k_lambda,k_mc) = sum(trace_MMscr_adap.screen_time_it);     
         if mc_it == 1
             screen_nb_iter_perIt_MMscr_adap{k_lambda} = max(trace_MMscr_adap.screen_nb_it(2:param.screen_period:end),1); 
+            alpha_star_MMscr{k_lambda} = trace_MMscr.alpha_star(2:param.screen_period:end);
             screen_max_MMscr{k_lambda} = (trace_MMscr.screen_nb_it(2:param.screen_period:end) == 0);
             screen_max_MMscr_adap{k_lambda} = (trace_MMscr_adap.screen_nb_it(2:param.screen_period:end) == 0); 
             gap_last_alpha_MMscr{k_lambda} = trace_MMscr.gap_last_alpha(2:param.screen_period:end);
             gap_last_alpha_MMscr_adap{k_lambda} = trace_MMscr_adap.gap_last_alpha(2:param.screen_period:end);
             theta_dist_MMscr{k_lambda} = trace_MMscr.theta_dist; 
             theta_dist_MMscr_adap{k_lambda} = trace_MMscr_adap.theta_dist;
+            screen_time_perIt_MMscr{k_lambda} = trace_MMscr.screen_time_it(2:param.screen_period:end);
+            screen_time_perIt_MMscr_adap{k_lambda} = trace_MMscr_adap.screen_time_it(2:param.screen_period:end);
         end
         for kk=1:5
             nb_iter_MM_various(kk,k_lambda,k_mc) = min([inf find(stop_crit_it_MM<10^(5-kk)*param.TOL,1)]);
@@ -526,12 +541,15 @@ for k_lambda = 1:length(lambdas)
         screen_time_SPIRALscr_adap(k_lambda,k_mc) = sum(trace_SPIRALscr_adap.screen_time_it);        
         if mc_it == 1
             screen_nb_iter_perIt_SPIRALscr_adap{k_lambda} = max(trace_SPIRALscr_adap.screen_nb_it(2:param.screen_period:end),1); 
+            alpha_star_SPIRALscr{k_lambda} = trace_SPIRALscr.alpha_star(2:param.screen_period:end);
             screen_max_SPIRALscr{k_lambda} = (trace_SPIRALscr.screen_nb_it(2:param.screen_period:end) == 0);
             screen_max_SPIRALscr_adap{k_lambda} = (trace_SPIRALscr_adap.screen_nb_it(2:param.screen_period:end) == 0); 
             gap_last_alpha_SPIRALscr{k_lambda} = trace_SPIRALscr.gap_last_alpha(2:param.screen_period:end);
             gap_last_alpha_SPIRALscr_adap{k_lambda} = trace_SPIRALscr_adap.gap_last_alpha(2:param.screen_period:end);
             theta_dist_SPIRALscr{k_lambda} = trace_SPIRALscr.theta_dist; 
             theta_dist_SPIRALscr_adap{k_lambda} = trace_SPIRALscr_adap.theta_dist;
+            screen_time_perIt_SPIRALscr{k_lambda} = trace_SPIRALscr.screen_time_it(2:param.screen_period:end);
+            screen_time_perIt_SPIRALscr_adap{k_lambda} = trace_SPIRALscr_adap.screen_time_it(2:param.screen_period:end);
         end
         for kk=1:5
             nb_iter_SPIRAL_various(kk,k_lambda,k_mc) = min([inf find(stop_crit_it_SPIRAL<10^(5-kk)*param.TOL,1)]);
