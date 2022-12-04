@@ -53,16 +53,13 @@ if (nargin < 8), improv_flag = true; end
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; trace.alpha_star = 0; return; end
 
 %% Safe sphere definition
-k=0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
+k=0; alpha_star = 0; improving = precalc.improving; % 1 = iterative local screening, 2 = analytic
 if improving == 2 % Analytic variant
     % Compute fixed-point
-    if gap < min(y(y~=0)./2) && improv_flag
+    if improv_flag && gap < precalc.min_y/2
         denominator = (1 + lambda*(theta(y~=0))).^2 ;
-        alpha_star = lambda^2* min((sqrt(y(y~=0))-sqrt(2*gap)).^2./denominator);
-    else
-        alpha_star = 0;
+        alpha_star = lambda^2* min((precalc.sqrt_y-sqrt(2*gap)).^2./denominator);
     end
-    trace.alpha_star = alpha_star; % storing fixed-point
 
     % max
     if alpha_star > precalc.alpha
@@ -95,5 +92,6 @@ screen_vec = (ATtheta + radius*precalc.normA < 1); % min(radius)
 
 % if k == 0, fprintf('.'), else, fprintf('%d ',k); end
 trace.nb_it = k;
+trace.alpha_star = alpha_star; % storing fixed-point
 end
 
