@@ -16,7 +16,7 @@ epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
-lambdas_rel = logspace(0,-2,10); %1e-2; %logspace(0,-2,20); %1e-3;  %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max) 
+lambdas_rel = 1e-2; %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max)
 
 warm_start = false;
 
