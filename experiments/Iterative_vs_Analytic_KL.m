@@ -20,7 +20,10 @@ lambdas_rel = 1e-2; %logspace(0,-2,20); %1e-3;  %[1e-1 1e-2 1e-3]; % regularizat
 
 param.screen_period = 1; % Screening is performed every screen_period iterations of the solver (default is 1)
 
-alpha_degrad_factor = 1e-2; % fprintf("\n ===> Alpha initialization degraded by a factor %f \n",alpha_degrad_factor)
+alpha_degrad_factor = 1;
+if alpha_degrad_factor ~= 1
+    fprintf("\n ===> Alpha initialization degraded by a factor %f \n",alpha_degrad_factor)
+end
 
 warm_start = false;
 
@@ -796,7 +799,8 @@ if PG
     idx_adap = min([inf find(stop_crit_it_SPIRALscr_adap<10^-4,1)]);        
     semilogy(trace_SPIRALscr_adap.screen_time_it(it_num_SPIRAL))
     grid on, hold on, semilogy(trace_SPIRALscr.screen_time_it(it_num_SPIRAL))
-    ylabel("Screening time"), xlabel("Solver iteration")        
+    ylabel("Screening time"), xlabel("Solver iteration")
+    legend({'Iterative', 'Analytic'})
 
     fprintf("\n =============== Proximal gradient solver ============ \n")
     % Solver times
@@ -816,7 +820,8 @@ if MM
     idx_adap = min([inf find(stop_crit_it_MMscr_adap<10^-4,1)]);
     semilogy(trace_MMscr_adap.screen_time_it(it_num_MM))
     grid on, hold on, semilogy(trace_MMscr.screen_time_it(it_num_MM))
-    ylabel("Screening time"), xlabel("Solver iteration")    
+    ylabel("Screening time"), xlabel("Solver iteration")
+    legend({'Iterative', 'Analytic'})
 
     fprintf("\n =============== Majoration-minimization solver ============ \n")
     % Solver times
