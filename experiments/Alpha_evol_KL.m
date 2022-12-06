@@ -740,8 +740,8 @@ figure, set(0,'defaultTextInterpreter','latex')
 kplot = 1; k_mc=1;
 if CoD
     subplot(2,CoD+PG+MM,kplot); hold on;
-    plot(trace_CoDscr.alpha_star(2:end))
-    plot(2*stop_crit_it_CoDscr(2:end)./R_it_CoDscr(2:end).^2,'k')    
+    plot(trace_CoDscr.alpha_star(it_num_CoD))
+    plot(2*stop_crit_it_CoDscr(it_num_CoD)./R_it_CoDscr(it_num_CoD).^2,'k')    
     ylabel("$\alpha$")
     legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
     hleg = legend('show');
@@ -754,13 +754,13 @@ if CoD
     subplot(2,CoD+PG+MM,kplot+CoD+PG+MM); 
     semilogy(stop_crit_it_CoDscr,'k')
     ylabel("Duality Gap"), xlabel("Iteration number")
-    kplot = kplot+1; 
+    kplot = kplot+1;
 end
 
 if PG
     subplot(2,CoD+PG+MM,kplot); hold on;    
-    plot(trace_SPIRALscr.alpha_star(2:end))
-    plot(2*stop_crit_it_SPIRALscr(2:end)./R_it_SPIRALscr(2:end).^2,'k')    
+    plot(trace_SPIRALscr.alpha_star(it_num_SPIRAL))
+    plot(2*stop_crit_it_SPIRALscr(it_num_SPIRAL)./R_it_SPIRALscr(it_num_SPIRAL).^2,'k')    
     ylabel("$\alpha$")
     legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
     hleg = legend('show');
@@ -778,8 +778,8 @@ end
 
 if MM
     subplot(2,CoD+PG+MM,kplot); hold on;     
-    plot(trace_MMscr.alpha_star(2:end))
-    plot(2*stop_crit_it_MMscr(2:end)./R_it_MMscr(2:end).^2,'k')    
+    plot(trace_MMscr.alpha_star(it_num_MM))
+    plot(2*stop_crit_it_MMscr(it_num_MM)./R_it_MMscr(it_num_MM).^2,'k')    
     ylabel("$\alpha$")
     legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
     hleg = legend('show');
@@ -793,4 +793,75 @@ if MM
     semilogy(stop_crit_it_MMscr,'k')
     ylabel("Duality Gap"), xlabel("Iteration number")
     kplot = kplot+1;
+end
+
+%%%%%%%%%%% Saved Refinement iterations %%%%%%%%%%%%%
+
+if CoD
+    fprintf("\n --------- Coordinate Descent solver ---------\n")
+    % Cases
+    alpha_CoD_it = 2*stop_crit_it_CoDscr(it_num_CoD)./R_it_CoDscr(it_num_CoD).^2;
+    gap_sqrt_diff_CoD_it = sqrt(2./alpha_CoD_it(1:end-1)).*( sqrt(gap_last_alpha_CoDscr{k_lambda}(1:end-1))...
+                                     - sqrt(stop_crit_it_CoDscr(it_num_CoD(2:end))) );    
+    case_CoD_it = 2*ones(size(gap_sqrt_diff_CoD_it));
+    case_CoD_it(gap_sqrt_diff_CoD_it >= theta_dist_CoDscr{k_lambda}(it_num_CoD(2:end))) = 1;
+    case_CoD_it(gap_sqrt_diff_CoD_it <= -theta_dist_CoDscr{k_lambda}(it_num_CoD(2:end))) = 3;
+    %initial iterations are yer a different case
+    case_CoD_it(1:find(gap_last_alpha_CoDscr{k_lambda}<Inf,1)) = 0;
+    case_CoD_it = [0 case_CoD_it];
+    
+    % Number of saved refinement iterations
+    iterative_iter = trace_CoDscr_adap.screen_nb_it(it_num_CoD);
+    analytic_iter = trace_CoDscr.screen_nb_it(it_num_CoD);
+    analytic_iter(case_CoD_it==2) = 1; analytic_iter(case_CoD_it==0) = 1;
+    saved_refinement_iter =  iterative_iter - analytic_iter;
+    fprintf("\nTotal saved refinement iterations: %d (of which %d for no-improvement condition)\n", ...
+        sum(saved_refinement_iter), sum(iterative_iter(case_CoD_it==3)) )  
+    fprintf("Total outer iterations: %d (of which %d on burning phase)\n", length(it_num_CoD), sum(case_CoD_it==0) )
+end
+
+if PG
+    fprintf("\n --------- Proximal Gradient solver ---------\n")
+    % Cases
+    alpha_SPIRAL_it = 2*stop_crit_it_SPIRALscr(it_num_SPIRAL)./R_it_SPIRALscr(it_num_SPIRAL).^2;
+    gap_sqrt_diff_SPIRAL_it = sqrt(2./alpha_SPIRAL_it(1:end-1)).*( sqrt(gap_last_alpha_SPIRALscr{k_lambda}(1:end-1))...
+                                     - sqrt(stop_crit_it_SPIRALscr(it_num_SPIRAL(2:end))) );    
+    case_SPIRAL_it = 2*ones(size(gap_sqrt_diff_SPIRAL_it));
+    case_SPIRAL_it(gap_sqrt_diff_SPIRAL_it >= theta_dist_SPIRALscr{k_lambda}(it_num_SPIRAL(2:end))) = 1;
+    case_SPIRAL_it(gap_sqrt_diff_SPIRAL_it <= -theta_dist_SPIRALscr{k_lambda}(it_num_SPIRAL(2:end))) = 3;
+    %initial iterations are yer a different case
+    case_SPIRAL_it(1:find(gap_last_alpha_SPIRALscr{k_lambda}<Inf,1)) = 0;
+    case_SPIRAL_it = [0 case_SPIRAL_it];
+    
+    % Number of saved refinement iterations
+    iterative_iter = trace_SPIRALscr_adap.screen_nb_it(it_num_SPIRAL);
+    analytic_iter = trace_SPIRALscr.screen_nb_it(it_num_SPIRAL);
+    analytic_iter(case_SPIRAL_it==2) = 1; analytic_iter(case_SPIRAL_it==0) = 1;
+    saved_refinement_iter =  iterative_iter - analytic_iter;
+    fprintf("\nTotal saved refinement iterations: %d (of which %d for no-improvement condition)\n", ...
+        sum(saved_refinement_iter), sum(iterative_iter(case_SPIRAL_it==3)) )  
+    fprintf("Total outer iterations: %d (of which %d on burning phase)\n", length(it_num_SPIRAL), sum(case_SPIRAL_it==0) )
+end
+
+if MM
+    fprintf("\n --------- MM solver ---------\n")
+    % Cases
+    alpha_MM_it = 2*stop_crit_it_MMscr(it_num_MM)./R_it_MMscr(it_num_MM).^2;
+    gap_sqrt_diff_MM_it = sqrt(2./alpha_MM_it(1:end-1)).*( sqrt(gap_last_alpha_MMscr{k_lambda}(1:end-1))...
+                                     - sqrt(stop_crit_it_MMscr(it_num_MM(2:end))) );    
+    case_MM_it = 2*ones(size(gap_sqrt_diff_MM_it));
+    case_MM_it(gap_sqrt_diff_MM_it >= theta_dist_MMscr{k_lambda}(it_num_MM(2:end))) = 1;
+    case_MM_it(gap_sqrt_diff_MM_it <= -theta_dist_MMscr{k_lambda}(it_num_MM(2:end))) = 3;
+    %initial iterations are yer a different case
+    case_MM_it(1:find(gap_last_alpha_MMscr{k_lambda}<Inf,1)) = 0;
+    case_MM_it = [0 case_MM_it];
+    
+    % Number of saved refinement iterations
+    iterative_iter = trace_MMscr_adap.screen_nb_it(it_num_MM);
+    analytic_iter = trace_MMscr.screen_nb_it(it_num_MM);
+    analytic_iter(case_MM_it==2) = 1; analytic_iter(case_MM_it==0) = 1;
+    saved_refinement_iter =  iterative_iter - analytic_iter;
+    fprintf("\nTotal saved refinement iterations: %d (of which %d for no-improvement condition)\n", ...
+        sum(saved_refinement_iter), sum(iterative_iter(case_MM_it==3)) )  
+    fprintf("Total outer iterations: %d (of which %d on burning phase)\n", length(it_num_MM), sum(case_MM_it==0) )
 end
