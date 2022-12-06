@@ -725,6 +725,10 @@ plot_results
 toc(timeStart)
 
 %% Plot results
+if CoD, it_num_CoD = 2:param.screen_period:length(stop_crit_it_CoDscr_adap); end
+if PG, it_num_SPIRAL = 2:param.screen_period:length(stop_crit_it_SPIRALscr_adap); end
+if MM, it_num_MM = 2:param.screen_period:length(stop_crit_it_MMscr_adap); end
+
 if k_lambda > 1, fprintf("\n\n ====> Plots correspond to the last regularizations in the grid. \n"); end
 % Following figures only makes sense for a single lambda.
 % Also, for more lambdas, one should replace:
@@ -740,7 +744,13 @@ if CoD
     plot(2*stop_crit_it_CoDscr(2:end)./R_it_CoDscr(2:end).^2,'k')    
     ylabel("$\alpha$")
     legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
+    hleg = legend('show');
     title(['Coordinate Descent, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    yyaxis right
+    trace_CoDscr_adap.screen_nb_it(trace_CoDscr_adap.screen_nb_it==0) = 1;
+    plot(trace_CoDscr_adap.screen_nb_it(it_num_CoD),'.')
+    hleg.String(end) = []; % delete the last legend entry of the very last plot
+    ylabel("Refinement iterations")
     subplot(2,CoD+PG+MM,kplot+CoD+PG+MM); 
     semilogy(stop_crit_it_CoDscr,'k')
     ylabel("Duality Gap"), xlabel("Iteration number")
@@ -752,8 +762,14 @@ if PG
     plot(trace_SPIRALscr.alpha_star(2:end))
     plot(2*stop_crit_it_SPIRALscr(2:end)./R_it_SPIRALscr(2:end).^2,'k')    
     ylabel("$\alpha$")
-    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")    
+    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
+    hleg = legend('show');
     title(['Proximal Gradient, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    yyaxis right
+    trace_SPIRALscr_adap.screen_nb_it(trace_SPIRALscr_adap.screen_nb_it==0) = 1;
+    plot(trace_SPIRALscr_adap.screen_nb_it(it_num_SPIRAL),'.')
+    hleg.String(end) = []; % delete the last legend entry of the very last plot
+    ylabel("Refinement iterations")
     subplot(2,CoD+PG+MM,kplot+CoD+PG+MM);
     semilogy(stop_crit_it_SPIRALscr,'k')
     ylabel("Duality Gap"), xlabel("Iteration number")
@@ -765,8 +781,14 @@ if MM
     plot(trace_MMscr.alpha_star(2:end))
     plot(2*stop_crit_it_MMscr(2:end)./R_it_MMscr(2:end).^2,'k')    
     ylabel("$\alpha$")
-    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")    
+    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
+    hleg = legend('show');
     title(['Proximal Gradient, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    yyaxis right
+    trace_MMscr_adap.screen_nb_it(trace_MMscr_adap.screen_nb_it==0) = 1;
+    plot(trace_MMscr_adap.screen_nb_it(it_num_MM),'.')
+    hleg.String(end) = []; % delete the last legend entry of the very last plot
+    ylabel("Refinement iterations")
     subplot(2,CoD+PG+MM,kplot+CoD+PG+MM);
     semilogy(stop_crit_it_MMscr,'k')
     ylabel("Duality Gap"), xlabel("Iteration number")
