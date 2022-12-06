@@ -47,7 +47,7 @@ function [screen_vec, radius, precalc, trace] = KL_GAP_Safe(precalc, lambda, ATt
 % Date: 30 Mar 2020
 
 if (nargin < 7), epsilon_y = 0; end
-if (nargin < 8), improv_flag = true; end
+if (nargin < 8) || (isfield(precalc, 'alpha_star_always') && precalc.alpha_star_always), improv_flag = true; end
 
 % Prevent errors
 if gap <= 0, screen_vec = false(size(ATtheta)); radius = 0; trace.nb_it = 0; trace.alpha_star = 0; return; end

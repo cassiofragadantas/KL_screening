@@ -1,7 +1,7 @@
 clear all
 timeStart = tic;
 addpath '../solvers/' '../' '../screening_rules/' '../datasets/'
-rng_seed = 1; % 0 for no seed
+rng_seed = 2; % 0 for no seed
 if rng_seed, rng(rng_seed), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n'); end
 
 %==== User parameters ====
@@ -16,13 +16,13 @@ epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
-lambdas_rel = 1e-2; %logspace(0,-2,20); %1e-3;  %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max) 
+lambdas_rel = 1e-1; %logspace(0,-2,20); %1e-3;  %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max) 
 
 param.screen_period = 1; % Screening is performed every screen_period iterations of the solver (default is 1)
 
-alpha_degrad_factor = 1;
-if alpha_degrad_factor ~= 1
-    fprintf("\n ===> Alpha initialization degraded by a factor %f \n",alpha_degrad_factor)
+alpha_star_always = true;
+if alpha_star_always
+    fprintf("\n ===> Fixed point alpha is systematically computed (for illustration purpose only)\n")
 end
 
 warm_start = false;
@@ -90,7 +90,7 @@ end
 
 %==== Storage variables ====
 if strcmp(problem_type,'KL')
-    CoD = false; MM = false; PG = true;
+    CoD = true; MM = false; PG = true;
 elseif strcmp(problem_type,'beta15')
     CoD = false; MM = true; PG = false;
 elseif strcmp(problem_type,'logistic')
@@ -395,10 +395,12 @@ for k_lambda = 1:length(lambdas)
     else
         error('\nType of problem not implemented! Check problem_type variable.')
     end
-    precalc.alpha_coord = precalc.alpha_coord*alpha_degrad_factor;
-    precalc.alpha = precalc.alpha_coord;
     time_precalc(k_lambda,k_mc) = toc(tPrecalc);
-   
+
+    if alpha_star_always
+        precalc.alpha_star_always = true; % for illustration purposes only
+    end
+
     %Run solvers
     if strcmp(problem_type,'KL')
         run_KL_solvers
@@ -723,127 +725,50 @@ plot_results
 toc(timeStart)
 
 %% Plot results
-tol = 1e-4; 
-k_tol = 5 + log10(param.TOL) - log10(tol);
-if CoD, it_num_CoD = 2:param.screen_period:min([inf find(stop_crit_it_CoDscr_adap<tol,1)]); end
-if PG, it_num_SPIRAL = 2:param.screen_period:min([inf find(stop_crit_it_SPIRALscr_adap<tol,1)]); end
-if MM, it_num_MM = 2:param.screen_period:min([inf find(stop_crit_it_MMscr_adap<tol,1)]); end
-
 if k_lambda > 1, fprintf("\n\n ====> Plots correspond to the last regularizations in the grid. \n"); end
 % Following figures only makes sense for a single lambda.
 % Also, for more lambdas, one should replace:
 % trace_CoDscr_adap.screen_time_it ==> screen_time_perIt_CoDscr_adap{k_lambda}
 % trace_CoDscr_adap.screen_nb_it ==> screen_nb_iter_perIt_CoDscr_adap{k_lambda}
 
-%%%%%%%%%%%% Number of refinement iterations %%%%%%%%%%%%
-figure
+%%%%%%%%%%%% Alpha evolution %%%%%%%%%%%%
+figure, set(0,'defaultTextInterpreter','latex')
 kplot = 1; k_mc=1;
 if CoD
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    trace_CoDscr_adap.screen_nb_it(trace_CoDscr_adap.screen_nb_it==0) = 1; 
-    plot(it_num_CoD, trace_CoDscr_adap.screen_nb_it(it_num_CoD),'.')
-    ylabel("Nb. of refinement iterations"), xlabel("Solver iteration (outer loop)")
-    ylim([0, 1.1*max(trace_CoDscr_adap.screen_nb_it)]), grid on
-    title(['CD, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel)) '}$'])
+    subplot(2,CoD+PG+MM,kplot); hold on;
+    plot(trace_CoDscr.alpha_star(2:end))
+    plot(2*stop_crit_it_CoDscr(2:end)./R_it_CoDscr(2:end).^2,'k')    
+    ylabel("$\alpha$")
+    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")
+    title(['Coordinate Descent, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    subplot(2,CoD+PG+MM,kplot+CoD+PG+MM); 
+    semilogy(stop_crit_it_CoDscr,'k')
+    ylabel("Duality Gap"), xlabel("Iteration number")
+    kplot = kplot+1; 
 end
 
 if PG
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    trace_SPIRALscr_adap.screen_nb_it(trace_SPIRALscr_adap.screen_nb_it==0) = 1; 
-    plot(it_num_SPIRAL, trace_SPIRALscr_adap.screen_nb_it(it_num_SPIRAL),'.')
-    ylabel("Nb. of refinement iterations"), xlabel("Solver iteration")
-    ylim([0, 1.1*max(trace_SPIRALscr_adap.screen_nb_it)]), grid on
-    title(['Prox. Grad., $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel)) '}$'])
+    subplot(2,CoD+PG+MM,kplot); hold on;    
+    plot(trace_SPIRALscr.alpha_star(2:end))
+    plot(2*stop_crit_it_SPIRALscr(2:end)./R_it_SPIRALscr(2:end).^2,'k')    
+    ylabel("$\alpha$")
+    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")    
+    title(['Proximal Gradient, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    subplot(2,CoD+PG+MM,kplot+CoD+PG+MM);
+    semilogy(stop_crit_it_SPIRALscr,'k')
+    ylabel("Duality Gap"), xlabel("Iteration number")
+    kplot = kplot+1;
 end
 
 if MM
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    trace_MMscr_adap.screen_nb_it(trace_MMscr_adap.screen_nb_it==0) = 1; 
-    plot(it_num_MM, trace_MCoD+PG+MM,Mscr_adap.screen_nb_it(it_num_MM),'.')
-    ylabel("Nb. of refinement iterations"), xlabel("Solver iteration")
-    ylim([0, 1.1*max(trace_MMscr_adap.screen_nb_it)]), grid on
-    title(['MM, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel)) '}$'])
-end
-
-
-%%%%%%%%%%%% Screening time %%%%%%%%%%%%
-kplot = 2;
-if CoD
-    idx_adap = min([inf find(stop_crit_it_CoDscr_adap<tol,1)]);
-
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    semilogy(trace_CoDscr_adap.screen_time_it(it_num_CoD))
-    grid on, hold on, semilogy(trace_CoDscr.screen_time_it(it_num_CoD))
-    ylabel("Screening time"), xlabel("Solver iteration") 
-    legend({'Iterative', 'Analytic'})
-%         nbins = round(length(time_it_SPIRALscr_adap)/10);
-%         histogram(screen_time_perIt_CoDscr_adap{k_lambda},nbins)
-%         histogram(screen_time_perIt_CoDscr{k_lambda},nbins)
-
-
-    fprintf("\n =============== Coordinate descent solver ============ \n")
-    % Solver times
-    fprintf("\n Solver total time (s):     Iterative=%.2s    Analytic=%.2s    Baseline=%.2s\n", ...
-        time_CoDscr_adap_various(k_tol), time_CoDscr_various(k_tol), time_CoD_various(k_tol) )
-    % Screening times - convergence until gap=1e-4
-    fprintf("\n Screening total time (s):  Iterative=%.2s    Analytic=%.2s \n", ...
-        screen_time_CoDscr_adap_various(k_tol,k_lambda,k_mc), screen_time_CoDscr_various(k_tol,k_lambda,k_mc) )
-    % Average number of refinement iterations
-    trace_CoDscr_adap.screen_nb_it(trace_CoDscr_adap.screen_nb_it==0) = 1; 
-    fprintf("\n Average nb. of refinement iterations: %.2f \n", ...
-        mean(trace_CoDscr_adap.screen_nb_it(it_num_CoD)) )
-    % Number of saved refinement iterations
-    saved_refinement_iter = sum(trace_CoDscr_adap.screen_nb_it(it_num_CoD) - trace_CoDscr.screen_nb_it(it_num_CoD));
-    fprintf("\n Total saved refinement iterations: %d (for %d total outer iterations)\n", ...
-            saved_refinement_iter, length(it_num_CoD))    
-end
-
-if PG
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    idx_adap = min([inf find(stop_crit_it_SPIRALscr_adap<10^-4,1)]);        
-    semilogy(trace_SPIRALscr_adap.screen_time_it(it_num_SPIRAL))
-    grid on, hold on, semilogy(trace_SPIRALscr.screen_time_it(it_num_SPIRAL))
-    ylabel("Screening time"), xlabel("Solver iteration")
-    legend({'Iterative', 'Analytic'})
-
-    fprintf("\n =============== Proximal gradient solver ============ \n")
-    % Solver times
-    fprintf("\n Solver total time (s):     Iterative=%.2s    Analytic=%.2s    Baseline=%.2s\n", ...
-        time_SPIRALscr_adap_various(k_tol), time_SPIRALscr_various(k_tol), time_SPIRAL_various(k_tol) )
-    % Screening times - convergence until gap=1e-4
-    fprintf("\n Screening total time (s):  Iterative=%.2s    Analytic=%.2s \n", ...
-        screen_time_SPIRALscr_adap_various(k_tol,k_lambda,k_mc), screen_time_SPIRALscr_various(k_tol,k_lambda,k_mc) )        
-    % Average number of refinement iterations
-    trace_SPIRALscr_adap.screen_nb_it(trace_SPIRALscr_adap.screen_nb_it==0) = 1; 
-    fprintf("\n Average nb. of refinement iterations: %.2f \n", ...
-        mean(trace_SPIRALscr_adap.screen_nb_it(it_num_SPIRAL)) )
-    % Number of saved refinement iterations
-    saved_refinement_iter = sum(trace_SPIRALscr_adap.screen_nb_it(it_num_SPIRAL) - trace_SPIRALscr.screen_nb_it(it_num_SPIRAL));
-    fprintf("\n Total saved refinement iterations: %d (for %d total outer iterations)\n", ...
-            saved_refinement_iter, length(it_num_SPIRAL))
-end
-
-if MM
-    subplot(CoD+PG+MM,2,kplot); kplot = kplot+2;
-    idx_adap = min([inf find(stop_crit_it_MMscr_adap<10^-4,1)]);
-    semilogy(trace_MMscr_adap.screen_time_it(it_num_MM))
-    grid on, hold on, semilogy(trace_MMscr.screen_time_it(it_num_MM))
-    ylabel("Screening time"), xlabel("Solver iteration")
-    legend({'Iterative', 'Analytic'})
-
-    fprintf("\n =============== Majoration-minimization solver ============ \n")
-    % Solver times
-    fprintf("\n Solver total time (s):     Iterative=%.2s    Analytic=%.2s    Baseline=%.2s\n", ...
-        time_MMscr_adap_various(k_tol), time_MMscr_various(k_tol), time_MM_various(k_tol) )
-    % Screening times - convergence until gap=1e-4
-    fprintf("\n Screening total time (s):  Iterative=%.2s    Analytic=%.2s \n", ...
-        screen_time_MMscr_adap_various(k_tol,k_lambda,k_mc), screen_time_MMscr_various(k_tol,k_lambda,k_mc) )        
-    % Average number of refinement iterations
-    trace_MMscr_adap.screen_nb_it(trace_MMscr_adap.screen_nb_it==0) = 1; 
-    fprintf("\n Average nb. of refinement iterations: %.2f \n", ...
-        mean(trace_MMscr_adap.screen_nb_it(it_num_MM)) )
-    % Number of saved refinement iterations
-    saved_refinement_iter = sum(trace_MMscr_adap.screen_nb_it(it_num_MM) - trace_MMscr.screen_nb_it(it_num_MM));
-    fprintf("\n Total saved refinement iterations: %d (for %d total outer iterations)\n", ...
-            saved_refinement_iter, length(it_num_MM))
+    subplot(2,CoD+PG+MM,kplot); hold on;     
+    plot(trace_MMscr.alpha_star(2:end))
+    plot(2*stop_crit_it_MMscr(2:end)./R_it_MMscr(2:end).^2,'k')    
+    ylabel("$\alpha$")
+    legend("$\bar{\alpha}^k$","$\alpha_{\mathcal{S}_b}$")    
+    title(['Proximal Gradient, $\lambda/\lambda_{max}=10^{' num2str(log10(lambdas_rel(k_lambda))) '}$'])
+    subplot(2,CoD+PG+MM,kplot+CoD+PG+MM);
+    semilogy(stop_crit_it_MMscr,'k')
+    ylabel("Duality Gap"), xlabel("Iteration number")
+    kplot = kplot+1;
 end
