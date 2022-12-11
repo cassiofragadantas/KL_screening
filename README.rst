@@ -18,7 +18,7 @@ It includes three main simulation cases: Logistic Regression, beta=1.5 divergenc
 Disclaimers
 -----------
 
-- CoD_KL_l1_update.cpp needs to be compiled (run 'mex CoD_KL_l1_update.cpp -lmwblas' from inside the solvers folder).
+- CoD_KL_l1_update.cpp needs to be compiled (run 'mex CoD_KL_l1_update.cpp -lmwblas' from inside the solvers folder). Two compiled versions have been provided, but might not work on your computer: .mexa64(compiled on a Linux 64-bit architecture) and .mexmaci64 (compiled on a Mac 64-bit).
 - Datasets are not provided and need to be downloaded by the user and placed in a subfolder ./datasets (Leukemia, Urban hyperspectral image, NIPS papers, 20 News Groups, Taste Profile and Encyclopedia). See file load_dataset.m for further instructions.
 - Synthetic experiments can be performed directly.
 
