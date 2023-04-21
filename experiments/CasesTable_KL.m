@@ -1,7 +1,7 @@
 clear all
 timeStart = tic;
 addpath '../solvers/' '../' '../screening_rules/' '../datasets/'
-rng_seed = 8; % 0 for no seed
+rng_seed = 2; % 0 for no seed. 8 for IEEE SPL paper first submission
 if rng_seed, rng(rng_seed), fprintf('\n\n /!\\/!\\ RANDOM SEED ACTIVATED /!\\/!\\\n\n'); end
 
 %==== User parameters ====
@@ -16,7 +16,7 @@ epsilon = 1e-6; % >0 to avoid singularity at 0 on KL divergence.
 param.epsilon = epsilon;
 param.epsilon_y = 0; %epsilon
 %CHECK STANDARD REGULARIZATION PATH IN GAP SAFE JOURNAL PAPER (100 POINTS FROM 10-3 TO 1)
-lambdas_rel = 1e-1; %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max)
+lambdas_rel = logspace(-3,-0.3,100); %1e-1; %[1e-1 1e-2 1e-3]; % regularization (relative to lambda_max)
 
 warm_start = false;
 
@@ -729,7 +729,7 @@ disp("Indecisive |                |                  |")
 disp("No improv. |                |                  |")
 
 if CoD
-    table_cases_CoD = zeros(3,3);
+    table_cases_CoD = zeros(3,3,length(lambdas_rel));
     for k_lambda = 1:length(lambdas_rel)    
         % Table cases - CoD
         it_num_CoD = 2:param.screen_period:length(stop_crit_it_CoDscr_all{k_lambda});
@@ -743,32 +743,44 @@ if CoD
         %initial iterations are yer a different case
         case_CoD_it(1:find(gap_last_alpha_CoDscr{k_lambda}<Inf,1)) = 0;
         
-        table_cases_CoD(1,3) = table_cases_CoD(1,3) + sum(case_CoD_it==1);
-        table_cases_CoD(2,3) = table_cases_CoD(2,3) + sum(case_CoD_it==2);
-        table_cases_CoD(3,3) = table_cases_CoD(3,3) + sum(case_CoD_it==3);
+        table_cases_CoD(1,3,k_lambda) = table_cases_CoD(1,3,k_lambda) + sum(case_CoD_it==1);
+        table_cases_CoD(2,3,k_lambda) = table_cases_CoD(2,3,k_lambda) + sum(case_CoD_it==2);
+        table_cases_CoD(3,3,k_lambda) = table_cases_CoD(3,3,k_lambda) + sum(case_CoD_it==3);
         sum(case_CoD_it~=0);
         % max
         case_CoD_it_max = case_CoD_it(screen_max_CoDscr{k_lambda}(2:end));
-        table_cases_CoD(1,1) = table_cases_CoD(1,1) + sum(case_CoD_it_max==1);
-        table_cases_CoD(2,1) = table_cases_CoD(2,1) + sum(case_CoD_it_max==2);
-        table_cases_CoD(3,1) = table_cases_CoD(3,1) + sum(case_CoD_it_max==3);
+        table_cases_CoD(1,1,k_lambda) = table_cases_CoD(1,1,k_lambda) + sum(case_CoD_it_max==1);
+        table_cases_CoD(2,1,k_lambda) = table_cases_CoD(2,1,k_lambda) + sum(case_CoD_it_max==2);
+        table_cases_CoD(3,1,k_lambda) = table_cases_CoD(3,1,k_lambda) + sum(case_CoD_it_max==3);
         sum(case_CoD_it_max~=0);
         % not max
         case_CoD_it_nomax = case_CoD_it(~screen_max_CoDscr{k_lambda}(2:end));
-        table_cases_CoD(1,2) = table_cases_CoD(1,2) + sum(case_CoD_it_nomax==1);
-        table_cases_CoD(2,2) = table_cases_CoD(2,2) + sum(case_CoD_it_nomax==2);
-        table_cases_CoD(3,2) = table_cases_CoD(3,2) + sum(case_CoD_it_nomax==3);
+        table_cases_CoD(1,2,k_lambda) = table_cases_CoD(1,2,k_lambda) + sum(case_CoD_it_nomax==1);
+        table_cases_CoD(2,2,k_lambda) = table_cases_CoD(2,2,k_lambda) + sum(case_CoD_it_nomax==2);
+        table_cases_CoD(3,2,k_lambda) = table_cases_CoD(3,2,k_lambda) + sum(case_CoD_it_nomax==3);
         sum(case_CoD_it_nomax~=0);
     end
     % table_cases_CoD
 
     % PERCENTUAL VALUES
-    table_cases_CoD = table_cases_CoD./sum(table_cases_CoD(:,end))*100;
-    table_cases_CoD = table_cases_CoD(:,1:2)
+    for k_lambda = 1:length(lambdas_rel)
+        table_cases_CoD(:,:,k_lambda) = table_cases_CoD(:,:,k_lambda)./sum(table_cases_CoD(:,end,k_lambda))*100;
+    end
+    table_cases_CoD = table_cases_CoD(:,1:2,:)
+
+    % Average and standard deviation
+    if length(lambdas_rel)>1
+        table_cases_CoD_mean = mean(table_cases_CoD,3)
+        table_cases_CoD_std = std(table_cases_CoD,0,3)
+        table_cases_CoD_quant25 = quantile(table_cases_CoD,0.25,3);
+        table_cases_CoD_quant50 = quantile(table_cases_CoD,0.5,3);
+        table_cases_CoD_quant75 = quantile(table_cases_CoD,0.75,3);        
+    end
+    save(strcat('CasesTable_KL_CoD_',num2str(length(lambdas_rel)),'lambdas_seed',num2str(rng_seed)),"table_cases_CoD")    
 end
 
 if PG 
-    table_cases_SPIRAL = zeros(3,3);
+    table_cases_SPIRAL = zeros(3,3,length(lambdas_rel));
     for k_lambda = 1:length(lambdas_rel)
         it_num_SPIRAL = 2:param.screen_period:length(stop_crit_it_SPIRALscr_all{k_lambda});
         alpha_SPIRAL_it = 2*stop_crit_it_SPIRALscr_all{k_lambda}(it_num_SPIRAL)./R_it_SPIRALscr_all{k_lambda}(it_num_SPIRAL).^2;
@@ -781,26 +793,38 @@ if PG
         %initial iterations are yer a different case
         case_SPIRAL_it(1:find(gap_last_alpha_SPIRALscr{k_lambda}<Inf,1)) = 0;
         
-        table_cases_SPIRAL(1,3) = table_cases_SPIRAL(1,3) + sum(case_SPIRAL_it==1);
-        table_cases_SPIRAL(2,3) = table_cases_SPIRAL(2,3) + sum(case_SPIRAL_it==2);
-        table_cases_SPIRAL(3,3) = table_cases_SPIRAL(3,3) + sum(case_SPIRAL_it==3);
+        table_cases_SPIRAL(1,3,k_lambda) = table_cases_SPIRAL(1,3,k_lambda) + sum(case_SPIRAL_it==1);
+        table_cases_SPIRAL(2,3,k_lambda) = table_cases_SPIRAL(2,3,k_lambda) + sum(case_SPIRAL_it==2);
+        table_cases_SPIRAL(3,3,k_lambda) = table_cases_SPIRAL(3,3,k_lambda) + sum(case_SPIRAL_it==3);
         sum(case_SPIRAL_it~=0);
         % max
         case_SPIRAL_it_max = case_SPIRAL_it(screen_max_SPIRALscr{k_lambda}(2:end));
-        table_cases_SPIRAL(1,1) = table_cases_SPIRAL(1,1) + sum(case_SPIRAL_it_max==1);
-        table_cases_SPIRAL(2,1) = table_cases_SPIRAL(2,1) + sum(case_SPIRAL_it_max==2);
-        table_cases_SPIRAL(3,1) = table_cases_SPIRAL(3,1) + sum(case_SPIRAL_it_max==3);
+        table_cases_SPIRAL(1,1,k_lambda) = table_cases_SPIRAL(1,1,k_lambda) + sum(case_SPIRAL_it_max==1);
+        table_cases_SPIRAL(2,1,k_lambda) = table_cases_SPIRAL(2,1,k_lambda) + sum(case_SPIRAL_it_max==2);
+        table_cases_SPIRAL(3,1,k_lambda) = table_cases_SPIRAL(3,1,k_lambda) + sum(case_SPIRAL_it_max==3);
         sum(case_SPIRAL_it_max~=0);
         % not max
         case_SPIRAL_it_nomax = case_SPIRAL_it(~screen_max_SPIRALscr{k_lambda}(2:end));
-        table_cases_SPIRAL(1,2) = table_cases_SPIRAL(1,2) + sum(case_SPIRAL_it_nomax==1);
-        table_cases_SPIRAL(2,2) = table_cases_SPIRAL(2,2) + sum(case_SPIRAL_it_nomax==2);
-        table_cases_SPIRAL(3,2) = table_cases_SPIRAL(3,2) + sum(case_SPIRAL_it_nomax==3);
+        table_cases_SPIRAL(1,2,k_lambda) = table_cases_SPIRAL(1,2,k_lambda) + sum(case_SPIRAL_it_nomax==1);
+        table_cases_SPIRAL(2,2,k_lambda) = table_cases_SPIRAL(2,2,k_lambda) + sum(case_SPIRAL_it_nomax==2);
+        table_cases_SPIRAL(3,2,k_lambda) = table_cases_SPIRAL(3,2,k_lambda) + sum(case_SPIRAL_it_nomax==3);
         sum(case_SPIRAL_it_nomax~=0);
     end
     % table_cases_SPIRAL
     
     % PERCENTUAL VALUES
-    table_cases_SPIRAL = table_cases_SPIRAL./sum(table_cases_SPIRAL(:,end))*100;
-    table_cases_SPIRAL = table_cases_SPIRAL(:,1:2)
+    for k_lambda = 1:length(lambdas_rel)
+        table_cases_SPIRAL(:,:,k_lambda) = table_cases_SPIRAL(:,:,k_lambda)./sum(table_cases_SPIRAL(:,end,k_lambda))*100;
+    end
+    table_cases_SPIRAL = table_cases_SPIRAL(:,1:2,:)
+
+    % Average and standard deviation
+    if length(lambdas_rel)>1
+        table_cases_SPIRAL_mean = mean(table_cases_SPIRAL,3)
+        table_cases_SPIRAL_std = std(table_cases_SPIRAL,0,3)
+        table_cases_SPIRAL_quant25 = quantile(table_cases_SPIRAL,0.25,3);
+        table_cases_SPIRAL_quant50 = quantile(table_cases_SPIRAL,0.5,3);
+        table_cases_SPIRAL_quant75 = quantile(table_cases_SPIRAL,0.75,3);          
+    end
+    save(strcat('CasesTable_KL_SPIRAL_',num2str(length(lambdas_rel)),'lambdas_seed',num2str(rng_seed)),"table_cases_SPIRAL")
 end
